@@ -268,7 +268,7 @@ const AdminDashboardPage = () => {
                                             <td data-label="Data">{format(new Date(l.created_at), 'dd/MM/yyyy HH:mm')}</td>
                                             <td data-label="Usuário">{l.user_name}</td>
                                             <td data-label="Ação" style={{ fontWeight: 600 }}>{l.action}</td>
-                                            <td data-label="Detalhes" style={{ fontSize: '0.8rem' }}>{l.details}</td>
+                                            <td data-label="Detalhes" style={{ fontSize: '0.8rem', wordBreak: 'break-all' }}>{l.details}</td>
                                         </tr>
                                     ))}
                                 </tbody>

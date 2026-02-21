@@ -177,8 +177,8 @@ const InventoryPage = () => {
                 </div>
 
                 {activeTab === 'manual' ? (
-                    <form onSubmit={handleUpdateStock} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '70vh', overflowY: 'auto', padding: '0.5rem' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <form onSubmit={handleUpdateStock} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '0.5rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             <div style={{ gridColumn: 'span 2' }}>
                                 <label className="label">Produto</label>
                                 <select className="input-field" value={newLog.product_id} onChange={e => {

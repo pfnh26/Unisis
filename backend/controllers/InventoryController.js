@@ -44,10 +44,19 @@ class InventoryController {
 
             const result = await this.inventoryService.processDanfe(accessKey, partnerId, repositories);
 
+            // Buscar nome do parceiro para o log
+            let partnerName = `ID: ${partnerId}`;
+            try {
+                const partner = await repositories.partner.findById(partnerId);
+                if (partner) partnerName = partner.name;
+            } catch (pErr) {
+                console.error("Erro ao buscar parceiro para log:", pErr);
+            }
+
             this.logActivity(
                 req.user.id || req.user.userId,
                 'Importação DANFE',
-                `Chave: ${accessKey} | Parceiro ID: ${partnerId}`
+                `Chave: ${accessKey} | Parceiro: ${partnerName}`
             );
 
             res.json(result);
