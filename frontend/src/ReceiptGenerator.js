@@ -39,9 +39,26 @@ const buildReceiptPDF = (data) => {
     y += 10;
 
     doc.setFont("helvetica", "normal");
-    const descLines = doc.splitTextToSize(data.product_description || "", 170);
-    doc.text(descLines, margin, y);
-    y += (descLines.length * 5) + 15;
+    if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+        data.items.forEach((item, index) => {
+            const itemText = `${item.quantity}x ${item.description}`;
+            const priceText = `R$ ${(parseFloat(item.price) * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+            doc.text(itemText, margin, y);
+            doc.text(priceText, 190, y, { align: 'right' });
+            y += 7;
+
+            if (y > 270) {
+                doc.addPage();
+                y = 20;
+            }
+        });
+        y += 5;
+    } else {
+        const descLines = doc.splitTextToSize(data.product_description || "Serviço/Produto", 170);
+        doc.text(descLines, margin, y);
+        y += (descLines.length * 5) + 10;
+    }
+    y += 5;
 
     // Values
     doc.setFont("helvetica", "bold");

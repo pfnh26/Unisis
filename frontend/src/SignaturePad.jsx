@@ -79,6 +79,7 @@ const SignaturePad = ({ onConfirm, onCancel }) => {
                 </div>
 
                 <button
+                    type="button"
                     onClick={handleClear}
                     style={{
                         position: 'absolute', top: '10px', right: '10px',
@@ -103,6 +104,7 @@ const SignaturePad = ({ onConfirm, onCancel }) => {
                 gap: '10px'
             }}>
                 <button
+                    type="button"
                     onClick={onCancel}
                     className="btn-primary"
                     style={{
@@ -126,6 +128,7 @@ const SignaturePad = ({ onConfirm, onCancel }) => {
                 </button>
 
                 <button
+                    type="button"
                     onClick={handleClear}
                     className="btn-primary"
                     style={{
@@ -149,6 +152,7 @@ const SignaturePad = ({ onConfirm, onCancel }) => {
                 </button>
 
                 <button
+                    type="button"
                     onClick={handleConfirm}
                     className="btn-primary"
                     style={{

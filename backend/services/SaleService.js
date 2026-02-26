@@ -14,7 +14,7 @@ class SaleService {
     }
 
     async createSale(data) {
-        const { client_id, seller_id, partner_id, product_description, product_id, cost, price, execution_date, description } = data;
+        const { client_id, seller_id, partner_id, product_description, product_id, cost, price, execution_date, description, items } = data;
 
         const sale = await this.saleRepository.create({
             client_id: client_id || null,
@@ -25,7 +25,8 @@ class SaleService {
             description,
             cost,
             price,
-            execution_date
+            execution_date,
+            items: JSON.stringify(items || [])
         });
 
         // Auto-generate Service Order
@@ -39,8 +40,25 @@ class SaleService {
             });
         }
 
-        // Update stock if product_id exists
-        if (product_id) {
+        // Update stock if items exist
+        const saleItems = items || [];
+        for (const item of saleItems) {
+            if (item.product_id) {
+                const product = await this.productRepository.findById(item.product_id);
+                if (product) {
+                    await this.productRepository.update(item.product_id, { stock: parseInt(product.stock) - (item.quantity || 1) });
+                    await this.inventoryRepository.create({
+                        product_id: item.product_id,
+                        type: 'Saída',
+                        quantity: item.quantity || 1,
+                        reason: `Venda Avulsa ID: ${sale.id}`
+                    });
+                }
+            }
+        }
+
+        // Keep legacy single product stock update for compatibility if items is empty
+        if (saleItems.length === 0 && product_id) {
             const product = await this.productRepository.findById(product_id);
             if (product) {
                 await this.productRepository.update(product_id, { stock: parseInt(product.stock) - 1 });
@@ -54,6 +72,27 @@ class SaleService {
         }
 
         return sale;
+    }
+
+    async updateSale(id, data) {
+        const { client_id, seller_id, partner_id, product_description, product_id, cost, price, execution_date, description, items } = data;
+
+        return await this.saleRepository.update(id, {
+            client_id: client_id || null,
+            seller_id: seller_id || null,
+            partner_id: partner_id || null,
+            product_id: product_id || null,
+            product_description,
+            description,
+            cost,
+            price,
+            execution_date,
+            items: JSON.stringify(items || [])
+        });
+    }
+
+    async deleteSale(id) {
+        return await this.saleRepository.delete(id);
     }
 
     async updateSaleStatus(id, status) {

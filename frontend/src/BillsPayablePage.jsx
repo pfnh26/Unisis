@@ -5,6 +5,29 @@ import Modal from './Modal';
 import ModalConfirm from './ModalConfirm';
 import { format, isPast, isToday, parseISO } from 'date-fns';
 
+// Converte string BR (1.234,56 ou 1234,56 ou 1234.56) para número float
+const parseCurrencyInput = (raw) => {
+    if (!raw) return '';
+    let s = String(raw).trim();
+    // Remove espaços
+    s = s.replace(/\s/g, '');
+    // Se tiver vírgula, trata como separador decimal BR (ex: 1.234,56 ou 100,5)
+    if (s.includes(',')) {
+        // remove pontos de milhar e troca vírgula por ponto
+        s = s.replace(/\./g, '').replace(',', '.');
+    }
+    // agora s está no formato americano: parse
+    const num = parseFloat(s);
+    return isNaN(num) ? '' : num;
+};
+
+// Formata número float para exibição BR: 2000 → "2.000,00"
+const formatCurrency = (val) => {
+    const num = parseFloat(val);
+    if (isNaN(num)) return '0,00';
+    return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
 const BillsPayablePage = () => {
     const [bills, setBills] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -61,8 +84,13 @@ const BillsPayablePage = () => {
 
     const handleCreate = async (e) => {
         e.preventDefault();
+        const parsedValue = parseCurrencyInput(newBill.value);
+        if (parsedValue === '' || isNaN(parsedValue)) {
+            alert('Informe um valor válido (ex: 150,00 ou 150.00)');
+            return;
+        }
         try {
-            await api.post('/bills', newBill);
+            await api.post('/bills', { ...newBill, value: parsedValue });
             setIsAddModalOpen(false);
             setNewBill({ description: '', category: '', value: '', due_date: '', recurrence: 'Nenhuma' });
             fetchBills();
@@ -73,8 +101,13 @@ const BillsPayablePage = () => {
 
     const handleUpdate = async (e) => {
         e.preventDefault();
+        const parsedValue = parseCurrencyInput(editingBill.value);
+        if (parsedValue === '' || isNaN(parsedValue)) {
+            alert('Informe um valor válido (ex: 150,00 ou 150.00)');
+            return;
+        }
         try {
-            await api.patch(`/bills/${editingBill.id}`, editingBill);
+            await api.patch(`/bills/${editingBill.id}`, { ...editingBill, value: parsedValue });
             setIsEditModalOpen(false);
             setEditingBill(null);
             fetchBills();
@@ -219,7 +252,7 @@ const BillsPayablePage = () => {
                                         <div className="client-name-card">{bill.description}</div>
                                     </td>
                                     <td data-label="Categoria">{bill.category}</td>
-                                    <td data-label="Valor">R$ {parseFloat(bill.value).toFixed(2)}</td>
+                                    <td data-label="Valor">R$ {formatCurrency(bill.value)}</td>
                                     <td data-label="Vencimento">{format(parseISO(bill.due_date), 'dd/MM/yyyy')}</td>
                                     <td data-label="Recorrência">{bill.recurrence}</td>
                                     <td data-label="Status">
@@ -257,7 +290,7 @@ const BillsPayablePage = () => {
                                                 </button>
                                             )}
                                             <button
-                                                onClick={() => { setEditingBill(bill); setIsEditModalOpen(true); }}
+                                                onClick={() => { setEditingBill({ ...bill, value: formatCurrency(bill.value) }); setIsEditModalOpen(true); }}
                                                 className="btn-primary"
                                                 title="Editar"
                                                 style={{ padding: '0.6rem', backgroundColor: 'var(--primary)' }}
@@ -345,13 +378,20 @@ const BillsPayablePage = () => {
                         />
                     </div>
                     <div>
-                        <label className="label">Valor</label>
+                        <label className="label">Valor (R$)</label>
                         <input
-                            type="number"
-                            step="0.01"
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Ex: 150,00"
                             className="input-field"
                             value={newBill.value}
                             onChange={e => setNewBill({ ...newBill, value: e.target.value })}
+                            onBlur={e => {
+                                const parsed = parseCurrencyInput(e.target.value);
+                                if (parsed !== '') {
+                                    setNewBill(prev => ({ ...prev, value: parsed.toFixed(2).replace('.', ',') }));
+                                }
+                            }}
                             required
                         />
                     </div>
@@ -404,13 +444,20 @@ const BillsPayablePage = () => {
                             />
                         </div>
                         <div>
-                            <label className="label">Valor</label>
+                            <label className="label">Valor (R$)</label>
                             <input
-                                type="number"
-                                step="0.01"
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="Ex: 150,00"
                                 className="input-field"
                                 value={editingBill.value}
                                 onChange={e => setEditingBill({ ...editingBill, value: e.target.value })}
+                                onBlur={e => {
+                                    const parsed = parseCurrencyInput(e.target.value);
+                                    if (parsed !== '') {
+                                        setEditingBill(prev => ({ ...prev, value: parsed.toFixed(2).replace('.', ',') }));
+                                    }
+                                }}
                                 required
                             />
                         </div>

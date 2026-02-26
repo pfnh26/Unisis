@@ -72,7 +72,7 @@ class AdminService {
         const { name, username, password, role, profit_percentage } = userData;
         const hashedPassword = await bcrypt.hash(password, 10);
         // Default permissions for new users
-        const defaultPerms = ['clients', 'products', 'partners', 'contracts', 'sales', 'inventory', 'finance'];
+        const defaultPerms = [];
 
         const client = await this.pool.connect();
         try {

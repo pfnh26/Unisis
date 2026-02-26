@@ -11,7 +11,7 @@ class CommissionService {
 
     async getCommissions(decodedUser, queryParams) {
         let { seller_id, month, year } = queryParams;
-        let sellerId = (seller_id === '' || seller_id === 'all') ? null : seller_id;
+        let sellerId = (seller_id === '' || seller_id === 'all' || !seller_id) ? null : seller_id;
 
         const currentUserId = decodedUser.userId || decodedUser.id;
         if (decodedUser.role === 'Vendedor') {
@@ -27,7 +27,12 @@ class CommissionService {
             FROM contracts c
             JOIN sellers s ON c.seller_id = s.id
             JOIN clients cl ON c.client_id = cl.id
-            WHERE c.status = 'Ativo' AND (s.id = $1 OR $1 IS NULL)
+            WHERE c.status = 'Ativo' 
+            AND (s.id = $1 OR $1 IS NULL)
+            AND NOT EXISTS (
+                SELECT 1 FROM service_orders so 
+                WHERE so.contract_id = c.id AND so.status = 'Cancelado'
+            )
         `, [sellerId]);
 
         let contractCommissions = [];
@@ -51,9 +56,26 @@ class CommissionService {
                 let commission = 0;
                 let status = "Amortizando Bomba";
 
-                if (!contract.has_pump || contract.no_amortization || runningProfitStore >= pumpValue) {
+                if (!contract.has_pump || contract.no_amortization) {
                     commission = profitPerMonth * (parseFloat(contract.profit_percentage) / 100);
                     status = "Comissionado";
+                } else {
+                    const currentTotalAccumulated = runningProfitStore + profitPerMonth;
+
+                    if (runningProfitStore >= pumpValue) {
+                        // Se já estava amortizado antes deste pagamento
+                        commission = profitPerMonth * (parseFloat(contract.profit_percentage) / 100);
+                        status = "Comissionado";
+                    } else if (currentTotalAccumulated > pumpValue) {
+                        // Se atingiu o limite de amortização NESTE pagamento
+                        const commissionablePart = currentTotalAccumulated - pumpValue;
+                        commission = commissionablePart * (parseFloat(contract.profit_percentage) / 100);
+                        status = "Comissionado (Pós-Amortização)";
+                    } else {
+                        // Ainda em amortização total
+                        commission = 0;
+                        status = "Amortizando Bomba";
+                    }
                 }
 
                 // If this payment happened in the month we are reporting
@@ -84,6 +106,10 @@ class CommissionService {
             AND EXTRACT(MONTH FROM s.execution_date) = $2 
             AND EXTRACT(YEAR FROM s.execution_date) = $3
             AND s.status = 'Pago'
+            AND NOT EXISTS (
+                SELECT 1 FROM service_orders so 
+                WHERE so.sale_id = s.id AND so.status = 'Cancelado'
+            )
         `, [sellerId, month, year]);
 
         const salesCommissions = salesRes.rows.map(s => ({

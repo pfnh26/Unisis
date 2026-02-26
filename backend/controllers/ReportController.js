@@ -58,6 +58,42 @@ class ReportController {
             res.status(500).json({ error: err.message });
         }
     }
+
+    async updateReport(req, res) {
+        try {
+            const { id } = req.params;
+            const userId = req.user.id || req.user.userId;
+            const report = await this.reportService.updateReport(id, req.body);
+
+            const clientName = req.body.client_name || 'Desconhecido';
+            await this.logActivity(userId, 'Atualizar Relatório', `Cliente: ${clientName} | Relatório ID: ${id}`);
+
+            res.json(report);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    }
+
+    async deleteReport(req, res) {
+        try {
+            const { id } = req.params;
+            const userId = req.user.id || req.user.userId;
+
+            // Get report details for logging
+            const reports = await this.reportService.getReportsByUser(userId);
+            const report = reports.find(r => r.id == id);
+            const clientName = report?.client_name || 'Desconhecido';
+
+            await this.reportService.deleteReport(id);
+            await this.logActivity(userId, 'Excluir Relatório', `Cliente: ${clientName} | Relatório ID: ${id}`);
+
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    }
 }
 
 module.exports = ReportController;

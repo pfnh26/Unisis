@@ -601,6 +601,48 @@ const AdminDashboardPage = () => {
                     <button type="submit" className="btn-primary" style={{ marginTop: '1rem' }}>Lançar Operação</button>
                 </form>
             </Modal>
+
+            {/* Modal Detalhes do Vendedor (Ordens de Serviço) */}
+            <Modal isOpen={isSellerModalOpen} onClose={() => setIsSellerModalOpen(false)} title={`Ordens de Serviço: ${selectedSeller?.name}`}>
+                <div className="table-container">
+                    <table style={{ fontSize: '0.85rem' }}>
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Cliente</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sellerOrders.length === 0 ? (
+                                <tr>
+                                    <td colSpan="3" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                                        Nenhuma ordem de serviço encontrada.
+                                    </td>
+                                </tr>
+                            ) : sellerOrders.map(order => (
+                                <tr key={order.id}>
+                                    <td>{format(new Date(order.execution_date), 'dd/MM/yyyy')}</td>
+                                    <td style={{ fontWeight: 600 }}>{order.client_name}</td>
+                                    <td>
+                                        <span style={{
+                                            padding: '0.2rem 0.5rem',
+                                            borderRadius: '1rem',
+                                            fontSize: '0.7rem',
+                                            fontWeight: 700,
+                                            backgroundColor: order.status === 'Feito' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                                            color: order.status === 'Feito' ? '#10b981' : '#f59e0b'
+                                        }}>
+                                            {order.status}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <button onClick={() => setIsSellerModalOpen(false)} className="btn-primary" style={{ width: '100%', marginTop: '1.5rem', backgroundColor: 'var(--text-muted)' }}>Fechar</button>
+            </Modal>
         </div>
     );
 };

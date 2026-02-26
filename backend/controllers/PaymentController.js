@@ -14,9 +14,9 @@ class PaymentController {
     }
 
     async createPayment(req, res) {
-        const { contract_id, sale_id, amount, description, payment_date } = req.body;
+        const { contract_id, sale_id, amount, description, payment_date, due_date_ref } = req.body;
         try {
-            const payment = await this.paymentService.createPayment({ contract_id, sale_id, amount, description, payment_date });
+            const payment = await this.paymentService.createPayment({ contract_id, sale_id, amount, description, payment_date, due_date_ref });
 
             // Buscar detalhes para o log
             let logDetails = `Valor: R$ ${parseFloat(amount).toFixed(2)}`;

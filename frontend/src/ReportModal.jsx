@@ -2,22 +2,29 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import api from './api';
 import { generateReportPDF } from './ReportGenerator';
-import { X, Search, Image as ImageIcon, Loader, Plus, FileText, PenTool, RotateCcw } from 'lucide-react';
+import { X, Search, Image as ImageIcon, Loader, Plus, FileText, PenTool } from 'lucide-react';
 import SignaturePad from './SignaturePad';
+import { useToast } from './ToastContext';
 
 import ClientQuickAddModal from './ClientQuickAddModal';
 
-const ReportModal = ({ isOpen, onClose, onSave }) => {
+const ReportModal = ({ isOpen, onClose, onSave, reportToEdit }) => {
+    const { showToast } = useToast();
     const [step, setStep] = useState(1); // 1: Form, 2: Preview
     const [searchTerm, setSearchTerm] = useState('');
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+    const [modalTab, setModalTab] = useState('01'); // '01' or '02'
 
     const [formData, setFormData] = useState({
+        report_type: '01',
         client_id: '',
         client_name: '',
+        client_cnpj: '',
         client_address: '',
+        client_city: '',
+        client_phone: '',
         client_email: '',
         contact_name: '',
         representative: 'ACQUA SERVICE – LUCAS – W209',
@@ -25,11 +32,26 @@ const ReportModal = ({ isOpen, onClose, onSave }) => {
         reason: '',
         sample_collection: '',
         comments: '',
-        images: [],
-        client_signature: null
+        images: [], // contains { file: File, preview: string } or { url: string, preview: string }
+        client_signature: null,
+        // Fields for Relatorio 02
+        equipment_items: [
+            { name: 'MANGUEIRAS', status: '', obs: '' },
+            { name: 'CABEÇOTE', status: '', obs: '' },
+            { name: 'VÁLVULA DE INJEÇÃO', status: '', obs: '' },
+            { name: 'FILTRO STD', status: '', obs: '' }
+        ],
+        dosage_regulation: '', // '20%' or '100%'
+        client_brand: '',
+        client_model: '',
+        client_serial: '',
+        defect_found: '',
+        service_performed: '',
+        second_signature: null
     });
 
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+    const [activeSignatureField, setActiveSignatureField] = useState('client_signature');
 
     const fetchData = async () => {
         try {
@@ -43,14 +65,79 @@ const ReportModal = ({ isOpen, onClose, onSave }) => {
             fetchData();
             setStep(1);
             setSearchTerm('');
-            setFormData({
-                client_id: '', client_name: '', client_address: '', client_email: '',
-                contact_name: '', representative: 'ACQUA SERVICE – LUCAS – W209',
-                visit_type: '', reason: '', sample_collection: '', comments: '',
-                images: [], client_signature: null
-            });
+
+            if (reportToEdit) {
+                // Formatting images for preview
+                let formattedImages = [];
+                if (reportToEdit.images) {
+                    const parsed = typeof reportToEdit.images === 'string' ? JSON.parse(reportToEdit.images) : reportToEdit.images;
+                    const baseUrl = api.defaults.baseURL.replace('/api', '');
+                    formattedImages = parsed.map(url => ({
+                        url,
+                        preview: url.startsWith('data:') ? url : (baseUrl + url)
+                    }));
+                }
+
+                const rType = reportToEdit.report_type || '01';
+                setModalTab(rType);
+
+                setFormData({
+                    report_type: rType,
+                    client_id: reportToEdit.client_id,
+                    client_name: reportToEdit.client_name || '',
+                    client_cnpj: reportToEdit.client_cnpj || '',
+                    client_address: reportToEdit.client_address || '',
+                    client_city: reportToEdit.client_city || '',
+                    client_phone: reportToEdit.client_phone || '',
+                    client_email: reportToEdit.client_email || '',
+                    contact_name: reportToEdit.contact_name || '',
+                    representative: reportToEdit.representative || 'ACQUA SERVICE – LUCAS – W209',
+                    visit_type: reportToEdit.visit_type || '',
+                    reason: reportToEdit.reason || '',
+                    sample_collection: reportToEdit.sample_collection || '',
+                    comments: reportToEdit.comments || '',
+                    images: formattedImages,
+                    client_signature: reportToEdit.client_signature ? (reportToEdit.client_signature.startsWith('data:') ? reportToEdit.client_signature : (api.defaults.baseURL.replace('/api', '') + reportToEdit.client_signature)) : null,
+                    // 02 Fields
+                    equipment_items: reportToEdit.equipment_items ? (typeof reportToEdit.equipment_items === 'string' ? JSON.parse(reportToEdit.equipment_items) : reportToEdit.equipment_items) : [
+                        { name: 'MANGUEIRAS', status: '', obs: '' },
+                        { name: 'CABEÇOTE', status: '', obs: '' },
+                        { name: 'VÁLVULA DE INJEÇÃO', status: '', obs: '' },
+                        { name: 'FILTRO STD', status: '', obs: '' }
+                    ],
+                    dosage_regulation: reportToEdit.dosage_regulation || '',
+                    client_brand: reportToEdit.client_brand || '',
+                    client_model: reportToEdit.client_model || '',
+                    client_serial: reportToEdit.client_serial || '',
+                    defect_found: reportToEdit.defect_found || '',
+                    service_performed: reportToEdit.service_performed || '',
+                    second_signature: reportToEdit.second_signature ? (reportToEdit.second_signature.startsWith('data:') ? reportToEdit.second_signature : (api.defaults.baseURL.replace('/api', '') + reportToEdit.second_signature)) : null
+                });
+            } else {
+                setFormData({
+                    report_type: modalTab,
+                    client_id: '', client_name: '', client_cnpj: '', client_address: '', client_city: '', client_phone: '', client_email: '',
+                    contact_name: '', representative: 'ACQUA SERVICE – LUCAS – W209',
+                    visit_type: '', reason: '', sample_collection: '', comments: '',
+                    images: [], client_signature: null,
+                    equipment_items: [
+                        { name: 'MANGUEIRAS', status: '', obs: '' },
+                        { name: 'CABEÇOTE', status: '', obs: '' },
+                        { name: 'VÁLVULA DE INJEÇÃO', status: '', obs: '' },
+                        { name: 'FILTRO STD', status: '', obs: '' }
+                    ],
+                    dosage_regulation: '', client_brand: '', client_model: '', client_serial: '',
+                    defect_found: '', service_performed: '', second_signature: null
+                });
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, reportToEdit]);
+
+    useEffect(() => {
+        if (!reportToEdit) {
+            setFormData(prev => ({ ...prev, report_type: modalTab }));
+        }
+    }, [modalTab, reportToEdit]);
 
     const filteredClients = clients.filter(c =>
         c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -65,17 +152,14 @@ const ReportModal = ({ isOpen, onClose, onSave }) => {
                 ...prev,
                 client_id: client.id,
                 client_name: client.name,
-                client_address: client.address || '',
+                client_cnpj: client.cnpj || client.cpf || '',
+                client_address: client.address || ((client.logradouro || '') + (client.numero ? ', ' + client.numero : '') + (client.bairro ? ', ' + client.bairro : '')),
+                client_city: client.data?.municipio || client.cidade || client.municipio || '',
+                client_phone: client.phone || '',
                 client_email: client.email || ''
             }));
         } else {
-            setFormData(prev => ({
-                ...prev,
-                client_id: '',
-                client_name: '',
-                client_address: '',
-                client_email: ''
-            }));
+            setFormData(prev => ({ ...prev, client_id: '', client_name: '', client_address: '', client_email: '' }));
         }
     };
 
@@ -114,32 +198,51 @@ const ReportModal = ({ isOpen, onClose, onSave }) => {
                 reader.readAsDataURL(file);
             });
 
-            for (const img of formData.images) {
-                const base64 = await fileToBase64(img.file);
-                imageBlobsForPDF.push({ base64 });
-
-                const uploadData = new FormData();
-                uploadData.append('image', img.file);
-
+            // Helper to fetch URL to base64
+            const urlToBase64 = async (url) => {
                 try {
-                    const { data } = await api.post('/reports/upload-image', uploadData, {
-                        headers: { 'Content-Type': 'multipart/form-data' }
-                    });
-                    uploadedUrls.push(data.imageUrl);
+                    const res = await fetch(url);
+                    const blob = await res.blob();
+                    return await fileToBase64(blob);
                 } catch (e) {
-                    console.warn("Upload failed, capturing for offline sync", e);
-                    // When offline, we use the base64 as a placeholder URL
-                    // The backend sync will handle the real upload later
-                    uploadedUrls.push(base64);
+                    return url;
+                }
+            };
+
+            for (const img of formData.images) {
+                if (img.file) {
+                    const base64 = await fileToBase64(img.file);
+                    imageBlobsForPDF.push({ base64 });
+
+                    const uploadData = new FormData();
+                    uploadData.append('image', img.file);
+
+                    try {
+                        const { data } = await api.post('/reports/upload-image', uploadData, {
+                            headers: { 'Content-Type': 'multipart/form-data' }
+                        });
+                        uploadedUrls.push(data.imageUrl);
+                    } catch (e) {
+                        uploadedUrls.push(base64);
+                    }
+                } else {
+                    uploadedUrls.push(img.url);
+                    const base64 = await urlToBase64(img.preview);
+                    imageBlobsForPDF.push({ base64 });
                 }
             }
 
-            const finalData = { ...formData, images: uploadedUrls, client_signature: formData.client_signature };
+            const finalData = { ...formData, images: uploadedUrls };
 
-            // Save report (will be queued if offline)
-            await api.post('/reports', finalData);
+            if (reportToEdit) {
+                await api.patch(`/reports/${reportToEdit.id}`, finalData);
+                showToast("Relatório atualizado com sucesso!", "success");
+            } else {
+                await api.post('/reports', finalData);
+                showToast("Relatório criado com sucesso!", "success");
+            }
 
-            // Generate PDF with local base64 images (works offline)
+            // Generate PDF
             const blobUrl = await generateReportPDF(finalData, imageBlobsForPDF);
             window.open(blobUrl, '_blank');
 
@@ -147,18 +250,45 @@ const ReportModal = ({ isOpen, onClose, onSave }) => {
             onClose();
         } catch (err) {
             console.error(err);
-            alert('Erro ao salvar relatório');
+            showToast('Erro ao salvar relatório', 'error');
         } finally {
             setLoading(false);
         }
     };
 
+    const handleEquipItemChange = (index, field, value) => {
+        const newItems = [...formData.equipment_items];
+        newItems[index][field] = value;
+        setFormData({ ...formData, equipment_items: newItems });
+    };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={step === 1 ? "Gerar Novo Relatório" : "Preview do Relatório"}>
+        <Modal isOpen={isOpen} onClose={onClose} title={step === 1 ? (reportToEdit ? "Editar Relatório" : "Gerar Novo Relatório") : "Preview do Relatório"}>
+            {step === 1 && (
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                    <button
+                        onClick={() => setModalTab('01')}
+                        style={{
+                            padding: '0.5rem 1rem', background: 'none', borderBottom: modalTab === '01' ? '2px solid var(--primary)' : 'none',
+                            color: modalTab === '01' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600
+                        }}
+                    >
+                        Visita
+                    </button>
+                    <button
+                        onClick={() => setModalTab('02')}
+                        style={{
+                            padding: '0.5rem 1rem', background: 'none', borderBottom: modalTab === '02' ? '2px solid var(--primary)' : 'none',
+                            color: modalTab === '02' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600
+                        }}
+                    >
+                        Locação
+                    </button>
+                </div>
+            )}
+
             {step === 1 ? (
                 <form onSubmit={(e) => { e.preventDefault(); setStep(2); }} className="responsive-form-grid">
-
                     {/* BUSCA DE CLIENTE */}
                     <div style={{ gridColumn: 'span 2' }}>
                         <label className="label">Pesquisar e Selecionar Cliente</label>
@@ -182,67 +312,129 @@ const ReportModal = ({ isOpen, onClose, onSave }) => {
                             <label className="label">Endereço da Unidade</label>
                             <input className="input-field" value={formData.client_address} onChange={e => setFormData({ ...formData, client_address: e.target.value })} placeholder="Logradouro, Nº, Bairro, Cidade..." />
                         </div>
-                        <div>
-                            <label className="label">E-mail de Contrato</label>
-                            <input className="input-field" value={formData.client_email} onChange={e => setFormData({ ...formData, client_email: e.target.value })} placeholder="envio@relatorio.com" />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }} className="mobile-full-width">
+                            <div>
+                                <label className="label">E-mail de Contrato</label>
+                                <input className="input-field" value={formData.client_email} onChange={e => setFormData({ ...formData, client_email: e.target.value })} placeholder="envio@relatorio.com" />
+                            </div>
+                            <div>
+                                <label className="label">Contato no Local / Responsável</label>
+                                <input className="input-field" value={formData.contact_name} onChange={e => setFormData({ ...formData, contact_name: e.target.value })} placeholder="Quem atendeu?" required />
+                            </div>
                         </div>
-                        <div>
-                            <label className="label">Contato no Local</label>
-                            <input className="input-field" value={formData.contact_name} onChange={e => setFormData({ ...formData, contact_name: e.target.value })} placeholder="Quem atendeu?" required />
-                        </div>
                     </div>
 
-                    {/* DETALHES DA VISITA */}
-                    <div style={{ gridColumn: 'span 2' }}>
-                        <label className="label">Representante NCH</label>
-                        <input className="input-field" value={formData.representative} readOnly style={{ backgroundColor: 'var(--bg-system)', opacity: 0.8 }} />
-                    </div>
+                    {modalTab === '01' ? (
+                        <>
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <label className="label">Representante NCH</label>
+                                <input className="input-field" value={formData.representative} readOnly style={{ backgroundColor: 'var(--bg-system)', opacity: 0.8 }} />
+                            </div>
 
-                    <div style={{ gridColumn: 'span 2' }}>
-                        <label className="label" style={{ opacity: 0, marginBottom: 0 }}>Visita de Rotina</label>
-                        <label style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.75rem',
-                            padding: '0.75rem 1rem',
-                            background: formData.visit_type ? 'rgba(37, 99, 235, 0.1)' : 'var(--bg-sidebar)',
-                            borderRadius: '0.5rem',
-                            cursor: 'pointer',
-                            border: formData.visit_type ? '1px solid var(--primary)' : '1px solid var(--border)',
-                            height: '48px',
-                            transition: 'all 0.2s'
-                        }}>
-                            <input
-                                type="checkbox"
-                                style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
-                                checked={!!formData.visit_type}
-                                onChange={e => setFormData({ ...formData, visit_type: e.target.checked ? 'Visita de Rotina' : '' })}
-                            />
-                            <span style={{ fontWeight: 600, fontSize: '0.85rem', color: formData.visit_type ? 'var(--primary)' : 'var(--text-main)' }}>Visita de Rotina</span>
-                        </label>
-                    </div>
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <label style={{
+                                    display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem',
+                                    background: formData.visit_type ? 'rgba(37, 99, 235, 0.1)' : 'var(--bg-sidebar)',
+                                    borderRadius: '0.5rem', cursor: 'pointer', border: formData.visit_type ? '1px solid var(--primary)' : '1px solid var(--border)',
+                                    height: '48px', transition: 'all 0.2s'
+                                }}>
+                                    <input type="checkbox" style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }} checked={!!formData.visit_type} onChange={e => setFormData({ ...formData, visit_type: e.target.checked ? 'Visita de Rotina' : '' })} />
+                                    <span style={{ fontWeight: 600, fontSize: '0.85rem', color: formData.visit_type ? 'var(--primary)' : 'var(--text-main)' }}>Visita de Rotina</span>
+                                </label>
+                            </div>
 
-                    <div style={{ gridColumn: 'span 2' }}>
-                        <label className="label">Motivo do Chamado / Objetivo</label>
-                        <input className="input-field" value={formData.reason} onChange={e => setFormData({ ...formData, reason: e.target.value })} placeholder="Descreva o motivo da visita..." required />
-                    </div>
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <label className="label">Motivo do Chamado / Objetivo</label>
+                                <input className="input-field" value={formData.reason} onChange={e => setFormData({ ...formData, reason: e.target.value })} placeholder="Descreva o motivo da visita..." required />
+                            </div>
 
-                    <div style={{ gridColumn: 'span 2' }}>
-                        <label className="label">Coleta de Amostra (Opcional)</label>
-                        <input className="input-field" value={formData.sample_collection} onChange={e => setFormData({ ...formData, sample_collection: e.target.value })} placeholder="Ex: Galão de 5L para laboratório..." />
-                    </div>
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <label className="label">Coleta de Amostra (Opcional)</label>
+                                <input className="input-field" value={formData.sample_collection} onChange={e => setFormData({ ...formData, sample_collection: e.target.value })} placeholder="" />
+                            </div>
 
-                    <div style={{ gridColumn: 'span 2' }}>
-                        <label className="label">Comentários e Ações Realizadas (Obrigatório)</label>
-                        <textarea
-                            className="input-field"
-                            rows="4"
-                            value={formData.comments}
-                            onChange={e => setFormData({ ...formData, comments: e.target.value })}
-                            placeholder="Relatório detalhado das ações..."
-                            required
-                        />
-                    </div>
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <label className="label">Comentários e Ações Realizadas (Obrigatório)</label>
+                                <textarea className="input-field" rows="4" value={formData.comments} onChange={e => setFormData({ ...formData, comments: e.target.value })} placeholder="Relatório detalhado das ações..." required />
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            {/* FORM RELATORIO 02 */}
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <label className="label">Motivo da Visita</label>
+                                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                                    {['Rotina', 'Problema com Equipamento', 'Conserto de Equipamento'].map(m => (
+                                        <label key={m} style={{
+                                            display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem',
+                                            background: formData.reason === m ? 'rgba(37, 99, 235, 0.1)' : 'var(--bg-sidebar)',
+                                            borderRadius: '0.5rem', cursor: 'pointer', border: formData.reason === m ? '1px solid var(--primary)' : '1px solid var(--border)',
+                                            flex: '1 1 auto', minWidth: '150px'
+                                        }}>
+                                            <input type="radio" name="reason" checked={formData.reason === m} onChange={() => setFormData({ ...formData, reason: m })} />
+                                            <span style={{ fontSize: '0.8rem' }}>{m}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <label className="label" style={{ marginBottom: '1rem', fontSize: '0.85rem', color: 'var(--primary)' }}>MANUTENÇÃO DE EQUIPAMENTOS EM COMODATO</label>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    {formData.equipment_items.map((item, idx) => (
+                                        <div key={idx} style={{ padding: '1rem', backgroundColor: 'var(--bg-sidebar)', borderRadius: '0.5rem', border: '1px solid var(--border)' }}>
+                                            <div style={{ fontWeight: 700, marginBottom: '0.5rem', fontSize: '0.8rem' }}>{item.name}</div>
+                                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                                                {['OK', 'SUBSTITUÍDO'].map(s => (
+                                                    <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                                        <input type="radio" name={`status-${idx}`} checked={item.status === s} onChange={() => handleEquipItemChange(idx, 'status', s)} />
+                                                        <span style={{ fontSize: '0.75rem' }}>{s}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                            <input className="input-field" style={{ padding: '0.4rem', fontSize: '0.8rem' }} placeholder="Observações..." value={item.obs} onChange={(e) => handleEquipItemChange(idx, 'obs', e.target.value)} />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <label className="label">Regulagem / Dosador</label>
+                                <div style={{ display: 'flex', gap: '1rem' }}>
+                                    {['20%', '100%'].map(v => (
+                                        <label key={v} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                            <input type="radio" name="dosage" checked={formData.dosage_regulation === v} onChange={() => setFormData({ ...formData, dosage_regulation: v })} />
+                                            <span style={{ fontSize: '0.8rem' }}>{v}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div style={{ gridColumn: 'span 2', padding: '1rem', backgroundColor: 'var(--bg-sidebar)', borderRadius: '0.5rem' }}>
+                                <label className="label" style={{ fontSize: '0.85rem', color: 'var(--primary)' }}>MANUTENÇÃO DE EQUIPAMENTO DO CLIENTE</label>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }} className="mobile-full-width">
+                                    <div><label className="label">Marca</label><input className="input-field" value={formData.client_brand} onChange={e => setFormData({ ...formData, client_brand: e.target.value })} /></div>
+                                    <div><label className="label">Modelo</label><input className="input-field" value={formData.client_model} onChange={e => setFormData({ ...formData, client_model: e.target.value })} /></div>
+                                    <div><label className="label">Nº Série</label><input className="input-field" value={formData.client_serial} onChange={e => setFormData({ ...formData, client_serial: e.target.value })} /></div>
+                                </div>
+                            </div>
+
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <label className="label">Defeito Constatado</label>
+                                <input className="input-field" value={formData.defect_found} onChange={e => setFormData({ ...formData, defect_found: e.target.value })} placeholder="Descreva o defeito..." />
+                            </div>
+
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <label className="label">Serviço Realizado</label>
+                                <textarea className="input-field" rows="2" value={formData.service_performed} onChange={e => setFormData({ ...formData, service_performed: e.target.value })} placeholder="O que foi feito?" />
+                            </div>
+
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <label className="label">Observações Adicionais</label>
+                                <textarea className="input-field" rows="3" value={formData.comments} onChange={e => setFormData({ ...formData, comments: e.target.value })} placeholder="Outras observações importantes..." />
+                            </div>
+                        </>
+                    )}
 
                     {/* IMAGENS */}
                     <div style={{ gridColumn: 'span 2' }}>
@@ -265,29 +457,35 @@ const ReportModal = ({ isOpen, onClose, onSave }) => {
                         </div>
                     </div>
 
-                    {/* ASSINATURA ELETRONICA */}
-                    <div style={{ gridColumn: 'span 2', marginTop: '1rem' }}>
-                        <label className="label">Assinatura do Responsável</label>
-                        {!formData.client_signature ? (
-                            <button
-                                type="button"
-                                onClick={() => setIsSignatureModalOpen(true)}
-                                className="btn-primary"
-                                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'var(--bg-sidebar)', color: 'var(--text-main)', border: '1px solid var(--border)' }}
-                            >
-                                <PenTool size={20} /> Coletar Assinatura Digital
-                            </button>
-                        ) : (
-                            <div style={{ position: 'relative', padding: '1rem', backgroundColor: '#fff', border: '1px solid var(--border)', borderRadius: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                <img src={formData.client_signature} alt="assinatura" style={{ maxHeight: '80px', filter: 'contrast(1.5)' }} />
-                                <button
-                                    type="button"
-                                    onClick={() => setFormData({ ...formData, client_signature: null })}
-                                    style={{ position: 'absolute', top: '5px', right: '5px', background: 'var(--bg-sidebar)', border: 'none', borderRadius: '50%', padding: '0.2rem' }}
-                                >
-                                    <X size={16} />
+                    {/* ASSINATURAS */}
+                    <div style={{ gridColumn: 'span 2', marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        <div>
+                            <label className="label">{modalTab === '01' ? "Assinatura do Responsável" : "Assinatura 01 (Contato)"}</label>
+                            {!formData.client_signature ? (
+                                <button type="button" onClick={() => { setActiveSignatureField('client_signature'); setIsSignatureModalOpen(true); }} className="btn-primary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'var(--bg-sidebar)', color: 'var(--text-main)', border: '1px solid var(--border)' }}>
+                                    <PenTool size={20} /> Coletar Assinatura Digital
                                 </button>
-                                <span style={{ position: 'absolute', bottom: '5px', left: '10px', fontSize: '0.6rem', color: 'var(--text-muted)' }}>Assinatura Coletada</span>
+                            ) : (
+                                <div style={{ position: 'relative', padding: '1rem', backgroundColor: '#fff', border: '1px solid var(--border)', borderRadius: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                    <img src={formData.client_signature} alt="assinatura" style={{ maxHeight: '80px', filter: 'contrast(1.5)' }} />
+                                    <button type="button" onClick={() => setFormData({ ...formData, client_signature: null })} style={{ position: 'absolute', top: '5px', right: '5px', background: 'var(--bg-sidebar)', border: 'none', borderRadius: '50%', padding: '0.2rem' }}><X size={16} /></button>
+                                </div>
+                            )}
+                        </div>
+
+                        {modalTab === '02' && (
+                            <div>
+                                <label className="label">Assinatura 02 (Recebimento / Cliente)</label>
+                                {!formData.second_signature ? (
+                                    <button type="button" onClick={() => { setActiveSignatureField('second_signature'); setIsSignatureModalOpen(true); }} className="btn-primary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'var(--bg-sidebar)', color: 'var(--text-main)', border: '1px solid var(--border)' }}>
+                                        <PenTool size={20} /> Coletar Segunda Assinatura
+                                    </button>
+                                ) : (
+                                    <div style={{ position: 'relative', padding: '1rem', backgroundColor: '#fff', border: '1px solid var(--border)', borderRadius: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                        <img src={formData.second_signature} alt="assinatura" style={{ maxHeight: '80px', filter: 'contrast(1.5)' }} />
+                                        <button type="button" onClick={() => setFormData({ ...formData, second_signature: null })} style={{ position: 'absolute', top: '5px', right: '5px', background: 'var(--bg-sidebar)', border: 'none', borderRadius: '50%', padding: '0.2rem' }}><X size={16} /></button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -295,7 +493,7 @@ const ReportModal = ({ isOpen, onClose, onSave }) => {
                     {isSignatureModalOpen && (
                         <SignaturePad
                             onConfirm={(sig) => {
-                                setFormData({ ...formData, client_signature: sig });
+                                setFormData({ ...formData, [activeSignatureField]: sig });
                                 setIsSignatureModalOpen(false);
                             }}
                             onCancel={() => setIsSignatureModalOpen(false)}
@@ -309,33 +507,36 @@ const ReportModal = ({ isOpen, onClose, onSave }) => {
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                     <div style={{ padding: '1.5rem', backgroundColor: 'var(--bg-sidebar)', borderRadius: '0.75rem', lineHeight: '1.6', border: '1px solid var(--border)' }}>
-                        <p style={{ fontWeight: 700, textAlign: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>PREVIEW DO RELATÓRIO TÉCNICO</p>
+                        <p style={{ fontWeight: 700, textAlign: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>PREVIEW DO RELATÓRIO {modalTab === '01' ? 'TÉCNICO' : '02 (DOSADORA)'}</p>
                         <p><b>Cliente:</b> {formData.client_name}</p>
                         <p><b>Unidade:</b> {formData.client_address || 'Não informada'}</p>
-                        <p><b>Tipo de Visita:</b> {formData.visit_type || 'Chamado Técnico'}</p>
+                        <p><b>Motivo/Tipo:</b> {formData.reason || formData.visit_type || 'Visita'}</p>
                         <p><b>Contato:</b> {formData.contact_name}</p>
-                        <p><b>Motivo:</b> {formData.reason}</p>
+
+                        {modalTab === '02' && (
+                            <div style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
+                                <p><b>Regulagem:</b> {formData.dosage_regulation}</p>
+                                <p><b>Equip. Cliente:</b> {formData.client_brand} {formData.client_model}</p>
+                            </div>
+                        )}
+
                         <div style={{ marginTop: '0.5rem', padding: '0.5rem', backgroundColor: 'var(--bg-card)', borderRadius: '0.4rem', fontSize: '0.85rem' }}>
-                            <p><b>Comentários:</b> {formData.comments}</p>
+                            <p><b>Comentários/Ações:</b> {formData.comments || formData.service_performed}</p>
                         </div>
-                        <p style={{ marginTop: '0.5rem' }}><b>Fotos anexadas:</b> {formData.images.length} foto(s)</p>
-                        <p style={{ marginTop: '0.5rem' }}><b>Assinatura do Cliente:</b> {formData.client_signature ? '✅ Coletada' : '❌ Não coletada'}</p>
+                        <p style={{ marginTop: '0.5rem' }}><b>Fotos:</b> {formData.images.length}</p>
+                        <p style={{ marginTop: '0.5rem' }}><b>Assinaturas:</b> {formData.client_signature ? '✅ 1' : '❌ 1'} {modalTab === '02' ? (formData.second_signature ? '✅ 2' : '❌ 2') : ''}</p>
                     </div>
 
                     <div style={{ display: 'flex', gap: '1rem' }}>
                         <button onClick={() => setStep(1)} className="btn-primary" style={{ flex: 1, backgroundColor: 'var(--text-muted)' }}>Voltar e Editar</button>
-                        <button onClick={handleSubmit} disabled={loading} className="btn-primary" style={{ flex: 1 }}>
-                            {loading ? <Loader className="animate-spin" /> : <><FileText size={20} /> Confirmar e Gerar PDF</>}
+                        <button onClick={handleSubmit} disabled={loading} className="btn-primary" style={{ flex: 1, backgroundColor: '#10b981' }}>
+                            {loading ? <Loader className="animate-spin" /> : <><FileText size={20} /> {reportToEdit ? "Salvar Alterações" : "Confirmar e Gerar PDF"}</>}
                         </button>
                     </div>
                 </div>
             )}
 
-            <ClientQuickAddModal
-                isOpen={isClientModalOpen}
-                onClose={() => setIsClientModalOpen(false)}
-                onClientAdded={handleQuickClientAdded}
-            />
+            <ClientQuickAddModal isOpen={isClientModalOpen} onClose={() => setIsClientModalOpen(false)} onClientAdded={handleQuickClientAdded} />
         </Modal>
     );
 };

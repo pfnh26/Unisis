@@ -64,6 +64,41 @@ class ContractController {
             res.status(500).json({ error: err.message });
         }
     }
+
+    async updateContract(req, res) {
+        try {
+            const { id } = req.params;
+            const contract = await this.contractService.updateContract(id, req.body);
+
+            // Get client name for logging
+            const contracts = await this.contractService.getAllContracts();
+            const contractData = contracts.find(c => c.id == id);
+            const clientName = contractData?.client_name || `ID: ${req.body.client_id}`;
+
+            this.logActivity(req.user.id || req.user.userId, 'Atualizar Contrato', `Cliente: ${clientName} | Tipo: ${req.body.type} | Valor: R$ ${parseFloat(req.body.total_value).toFixed(2)}`);
+            res.json(contract);
+        } catch (err) {
+            res.status(400).json({ error: err.message });
+        }
+    }
+
+    async deleteContract(req, res) {
+        try {
+            const { id } = req.params;
+
+            // Get client name for logging before deletion
+            const contracts = await this.contractService.getAllContracts();
+            const contractData = contracts.find(c => c.id == id);
+            const clientName = contractData?.client_name || 'Desconhecido';
+
+            await this.contractService.deleteContract(id);
+            this.logActivity(req.user.id || req.user.userId, 'Excluir Contrato', `Cliente: ${clientName} | Contrato ID: ${id}`);
+
+            res.json({ success: true });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    }
 }
 
 module.exports = ContractController;

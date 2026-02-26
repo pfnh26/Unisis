@@ -27,17 +27,29 @@ class NotificationService {
             const paymentsRes = await this.pool.query("SELECT * FROM payments");
 
             for (const contract of contractsRes.rows) {
-                const start = new Date(contract.start_date);
-                for (let i = 0; i < contract.duration_months; i++) {
-                    const dueDate = addMonths(start, i);
-                    dueDate.setDate(contract.payment_day);
+                const contractStart = new Date(contract.start_date);
 
+                // Garantir que a primeira parcela seja no ou após o início do contrato
+                let firstDueDate = new Date(contractStart);
+                firstDueDate.setDate(contract.payment_day);
+                if (isBefore(firstDueDate, contractStart)) {
+                    firstDueDate = addMonths(firstDueDate, 1);
+                }
+
+                for (let i = 0; i < contract.duration_months; i++) {
+                    const dueDate = addMonths(firstDueDate, i);
+
+                    /* Parcela i + 1 */
                     if (isBefore(dueDate, today) && !isSameDay(dueDate, today)) {
-                        const isPaid = paymentsRes.rows.some(p =>
-                            p.contract_id === contract.id &&
-                            isSameMonth(new Date(p.payment_date), dueDate) &&
-                            isSameYear(new Date(p.payment_date), dueDate)
-                        );
+                        const isPaid = paymentsRes.rows.some(p => {
+                            if (p.contract_id !== contract.id) return false;
+                            if (p.due_date_ref) {
+                                return isSameMonth(new Date(p.due_date_ref), dueDate) && isSameYear(new Date(p.due_date_ref), dueDate);
+                            }
+                            if (p.description === `Parcela ${i + 1}`) return true;
+                            // Fallback para pagamentos antigos sem ref ou descrição específica
+                            return isSameMonth(new Date(p.payment_date), dueDate) && isSameYear(new Date(p.payment_date), dueDate);
+                        });
 
                         if (!isPaid) {
                             overdue.push({

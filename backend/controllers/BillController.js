@@ -38,8 +38,16 @@ class BillController {
     async deleteBill(req, res) {
         try {
             const { id } = req.params;
+            // Busca os dados ANTES de excluir para logar com detalhes
+            const bill = await this.billService.getBillById(id);
             await this.billService.deleteBill(id);
-            await this.logActivity(req.user.id || req.user.userId, 'Excluir Conta a Pagar', `Conta ID: ${id}`);
+            if (bill) {
+                const dueDateFormatted = new Date(bill.due_date).toLocaleDateString('pt-BR');
+                const valueFormatted = parseFloat(bill.value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                await this.logActivity(req.user.id || req.user.userId, 'Excluir Conta a Pagar', `Conta: ${bill.description} | Valor: R$ ${valueFormatted} | Vencimento: ${dueDateFormatted}`);
+            } else {
+                await this.logActivity(req.user.id || req.user.userId, 'Excluir Conta a Pagar', `Conta ID: ${id}`);
+            }
             res.sendStatus(204);
         } catch (err) {
             res.status(500).json({ error: err.message });

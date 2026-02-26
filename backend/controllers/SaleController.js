@@ -34,14 +34,29 @@ class SaleController {
         const { id } = req.params;
         const { status } = req.body;
         try {
-            // Buscar detalhes da venda antes de atualizar
-            const sales = await this.saleService.getAllSales();
-            const saleData = sales.find(s => s.id == id);
-            const clientName = saleData?.client_name || 'Cliente não informado';
-            const productName = saleData?.product_description || 'Serviço';
-
             await this.saleService.updateSaleStatus(id, status);
-            this.logActivity(req.user.id || req.user.userId, 'Atualizar Status de Venda Avulsa', `Produto/Serviço: ${productName} | Cliente: ${clientName} | Novo Status: ${status}`);
+            res.json({ success: true });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    }
+
+    async updateSale(req, res) {
+        const { id } = req.params;
+        try {
+            const sale = await this.saleService.updateSale(id, req.body);
+            this.logActivity(req.user.id || req.user.userId, 'Editar Venda Avulsa', `ID: ${id} | Cliente ID: ${req.body.client_id}`);
+            res.json(sale);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    }
+
+    async deleteSale(req, res) {
+        const { id } = req.params;
+        try {
+            await this.saleService.deleteSale(id);
+            this.logActivity(req.user.id || req.user.userId, 'Excluir Venda Avulsa', `ID: ${id}`);
             res.json({ success: true });
         } catch (err) {
             res.status(500).json({ error: err.message });

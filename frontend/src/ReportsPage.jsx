@@ -1,15 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import api from './api';
-import { FileText, Plus, Search, Eye } from 'lucide-react';
+import { FileText, Plus, Search, Eye, Edit2, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import ReportModal from './ReportModal';
+import ModalConfirm from './ModalConfirm';
 import { generateReportPDF } from './ReportGenerator';
+import { useToast } from './ToastContext';
 
 const ReportsPage = () => {
+    const { showToast } = useToast();
     const [reports, setReports] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(false);
+
+    // Edit/Delete state
+    const [editingReport, setEditingReport] = useState(null);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [reportToDelete, setReportToDelete] = useState(null);
 
     const fetchReports = async () => {
         setLoading(true);
@@ -81,11 +89,25 @@ const ReportsPage = () => {
         }
     };
 
+    const handleDelete = async () => {
+        try {
+            await api.delete(`/reports/${reportToDelete.id}`);
+            showToast("Relatório excluído com sucesso!", "success");
+            setIsDeleteModalOpen(false);
+            fetchReports();
+        } catch (err) {
+            showToast("Erro ao excluir relatório", "error");
+        }
+    };
+
+    const startEdit = (report) => {
+        setEditingReport(report);
+        setIsModalOpen(true);
+    };
+
     const filteredReports = reports.filter(r => {
         if (searchTerm.startsWith('#')) {
             const id = searchTerm.substring(1);
-            // Check report ID or client ID? Usually search is for client. 
-            // The previous logic checked both. Let's keep both but with # prefix.
             return r.client_id?.toString() === id || r.id.toString() === id;
         }
         return r.client_name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -95,7 +117,7 @@ const ReportsPage = () => {
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Meus Relatórios</h2>
-                <button onClick={() => setIsModalOpen(true)} className="btn-primary">
+                <button onClick={() => { setEditingReport(null); setIsModalOpen(true); }} className="btn-primary">
                     <Plus size={20} /> Novo Relatório
                 </button>
             </div>
@@ -152,8 +174,14 @@ const ReportsPage = () => {
                                 <td data-label="Tipo">{report.visit_type || 'Chamado Técnico'}</td>
                                 <td data-label="Ações">
                                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                                        <button onClick={() => handleViewPDF(report)} title="Visualizar Relatório" className="btn-primary" style={{ padding: '0.8rem', backgroundColor: report.isPending ? '#f59e0b' : 'var(--primary)' }}>
-                                            <FileText size={22} />
+                                        <button onClick={() => handleViewPDF(report)} title="Visualizar PDF" className="btn-primary" style={{ padding: '0.8rem', backgroundColor: report.isPending ? '#f59e0b' : '#3b82f6' }}>
+                                            <FileText size={18} />
+                                        </button>
+                                        <button onClick={() => startEdit(report)} title="Editar Relatório" className="btn-primary" style={{ padding: '0.8rem', backgroundColor: '#fbbf24' }}>
+                                            <Edit2 size={18} />
+                                        </button>
+                                        <button onClick={() => { setReportToDelete(report); setIsDeleteModalOpen(true); }} title="Excluir Relatório" className="btn-primary" style={{ padding: '0.8rem', backgroundColor: '#ef4444' }}>
+                                            <Trash2 size={18} />
                                         </button>
                                     </div>
                                 </td>
@@ -167,6 +195,15 @@ const ReportsPage = () => {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onSave={fetchReports}
+                reportToEdit={editingReport}
+            />
+
+            <ModalConfirm
+                isOpen={isDeleteModalOpen}
+                onClose={() => setIsDeleteModalOpen(false)}
+                onConfirm={handleDelete}
+                title="Excluir Relatório"
+                message="Tem certeza que deseja excluir permanentemente este relatório?"
             />
         </div>
     );

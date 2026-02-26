@@ -15,6 +15,10 @@ class BillService {
         return await this.billRepository.update(id, updates);
     }
 
+    async getBillById(id) {
+        return await this.billRepository.findById(id);
+    }
+
     async deleteBill(id) {
         return await this.billRepository.delete(id);
     }

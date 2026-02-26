@@ -3,3 +3,9 @@ ngrok http --domain=truly-romantic-cattle.ngrok-free.app 5173
 
 
 python backend/services/danfe_handler.py 35260204108166000187550010000604371751138133 39797430000111 d:\UniSis\danfe\certificado.p12 Ngcon1
+
+
+sudo find / -type f -name "clear_db.py" 2>/dev/null
+scp -r /d/UniSis/* unisis:/var/www/unisis/
+ssh unisis 
+sshi.unisis.online

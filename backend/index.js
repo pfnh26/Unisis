@@ -94,7 +94,7 @@ services.client = new ClientService(repositories.client);
 services.product = new ProductService(repositories.product);
 services.seller = new SellerService(repositories.seller, repositories.user, pool);
 services.partner = new PartnerService(repositories.partner);
-services.contract = new ContractService(repositories.contract, repositories.serviceOrder, repositories.seller);
+services.contract = new ContractService(repositories.contract, repositories.serviceOrder, repositories.seller, repositories.payment, pool);
 services.sale = new SaleService(repositories.sale, repositories.serviceOrder, repositories.product, repositories.inventory, repositories.seller, repositories.payment, pool);
 services.inventory = new InventoryService(repositories.inventory, repositories.product);
 services.payment = new PaymentService(repositories.payment, repositories.contract, repositories.sale);
@@ -189,7 +189,9 @@ app.delete('/api/partners/:id', authenticateToken, (req, res) => controllers.par
 // Contracts
 app.get('/api/contracts', authenticateToken, (req, res) => controllers.contract.getContracts(req, res));
 app.post('/api/contracts', authenticateToken, (req, res) => controllers.contract.createContract(req, res));
-app.patch('/api/contracts/:id', authenticateToken, (req, res) => controllers.contract.updateContractStatus(req, res));
+app.patch('/api/contracts/:id', authenticateToken, (req, res) => controllers.contract.updateContract(req, res)); // Changed from status to full update
+app.patch('/api/contracts/:id/status', authenticateToken, (req, res) => controllers.contract.updateContractStatus(req, res));
+app.delete('/api/contracts/:id', authenticateToken, (req, res) => controllers.contract.deleteContract(req, res));
 app.post('/api/contracts/:id/upload', authenticateToken, upload.single('pdf'), (req, res) => controllers.contract.uploadPdf(req, res));
 app.get('/api/contracts/:id/payments', authenticateToken, (req, res) => controllers.payment.getPaymentsByContract(req, res));
 
@@ -197,6 +199,8 @@ app.get('/api/contracts/:id/payments', authenticateToken, (req, res) => controll
 app.get('/api/extra-sales', authenticateToken, (req, res) => controllers.sale.getSales(req, res));
 app.post('/api/extra-sales', authenticateToken, (req, res) => controllers.sale.createSale(req, res));
 app.patch('/api/extra-sales/:id/status', authenticateToken, (req, res) => controllers.sale.updateSaleStatus(req, res));
+app.patch('/api/extra-sales/:id', authenticateToken, (req, res) => controllers.sale.updateSale(req, res));
+app.delete('/api/extra-sales/:id', authenticateToken, (req, res) => controllers.sale.deleteSale(req, res));
 
 // Inventory
 app.get('/api/inventory-logs', authenticateToken, (req, res) => controllers.inventory.getLogs(req, res));
@@ -221,6 +225,8 @@ app.patch('/api/service-orders/:id', authenticateToken, (req, res) => controller
 // Reports
 app.get('/api/reports', authenticateToken, (req, res) => controllers.report.getReports(req, res));
 app.post('/api/reports', authenticateToken, (req, res) => controllers.report.createReport(req, res));
+app.patch('/api/reports/:id', authenticateToken, (req, res) => controllers.report.updateReport(req, res));
+app.delete('/api/reports/:id', authenticateToken, (req, res) => controllers.report.deleteReport(req, res));
 app.post('/api/reports/upload-image', authenticateToken, upload.single('image'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
     const imageUrl = `/uploads/${req.file.filename}`;

@@ -56,23 +56,63 @@ const FinancePage = () => {
     };
 
     const buildInvoices = (contract, currentPayments) => {
-        if (!contract) return [];
+        if (!contract || !contract.start_date) return [];
         const invoices = [];
-        const startDate = new Date(contract.start_date);
 
-        for (let i = 0; i < contract.duration_months; i++) {
-            const dueDate = addMonths(startDate, i);
-            dueDate.setDate(contract.payment_day);
+        // Parse date manually or use new Date if ISO string to avoid timezone shifts
+        let startDate;
+        if (contract.start_date.includes('-')) {
+            const dateParts = contract.start_date.split('T')[0].split('-');
+            startDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+        } else {
+            startDate = new Date(contract.start_date);
+        }
 
-            const isPaid = currentPayments.some(p =>
-                isSameMonth(new Date(p.payment_date), dueDate) &&
-                isSameYear(new Date(p.payment_date), dueDate)
-            );
+        if (isNaN(startDate.getTime())) return [];
+
+        const paymentDay = parseInt(contract.payment_day) || 1;
+        const durationMonths = parseInt(contract.duration_months) || 0;
+
+        // Determine the first month's due date
+        let firstDueDate = new Date(startDate.getFullYear(), startDate.getMonth(), paymentDay);
+
+        // If firstDueDate is before startDate, we move to next month to ensure payment is after start
+        if (firstDueDate < startDate) {
+            firstDueDate = addMonths(firstDueDate, 1);
+        }
+
+        for (let i = 0; i < durationMonths; i++) {
+            // Generate each month independently
+            let dueDate = addMonths(firstDueDate, i);
+
+            // Re-apply the payment day, capping to the month's maximum (e.g. 31 in Feb becomes 28)
+            const year = dueDate.getFullYear();
+            const month = dueDate.getMonth();
+            const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+            dueDate.setDate(Math.min(paymentDay, lastDayOfMonth));
+
+            if (isNaN(dueDate.getTime())) continue;
+
+            const isPaid = currentPayments.some(p => {
+                const refDate = p.due_date_ref ? new Date(p.due_date_ref) : null;
+                if (refDate && !isNaN(refDate.getTime())) {
+                    return isSameMonth(refDate, dueDate) && isSameYear(refDate, dueDate);
+                }
+
+                if (p.description === `Parcela ${i + 1}`) return true;
+
+                const pDate = p.payment_date ? new Date(p.payment_date) : null;
+                if (pDate && !isNaN(pDate.getTime())) {
+                    return isSameMonth(pDate, dueDate) && isSameYear(pDate, dueDate);
+                }
+                return false;
+            });
 
             invoices.push({
                 dueDate: format(dueDate, 'yyyy-MM-dd'),
                 amount: contract.total_value,
-                isPaid
+                isPaid,
+                label: `Parcela ${i + 1}`
             });
         }
         return invoices;
@@ -88,9 +128,9 @@ const FinancePage = () => {
         try {
             await api.post('/payments', {
                 amount: invoice.amount,
-                description: `Mensalidade ref. ${format(new Date(invoice.dueDate), 'MM/yyyy')}`,
+                description: invoice.label,
                 payment_date: format(new Date(), 'yyyy-MM-dd'),
-                due_date_ref: format(new Date(invoice.dueDate), 'yyyy-MM-dd'),
+                due_date_ref: invoice.dueDate,
                 contract_id: selectedContract.id
             });
             const { data } = await api.get(`/contracts/${selectedContract.id}/payments`);
@@ -105,30 +145,7 @@ const FinancePage = () => {
         }
     };
 
-    const generateInvoices = () => {
-        if (!selectedContract) return [];
-        const invoices = [];
-        const startDate = new Date(selectedContract.start_date);
 
-        for (let i = 0; i < selectedContract.duration_months; i++) {
-            const dueDate = addMonths(startDate, i);
-            dueDate.setDate(selectedContract.payment_day);
-
-            const isPaid = payments.some(p => {
-                const pDate = p.due_date_ref ? new Date(p.due_date_ref) : new Date(p.payment_date);
-                // Adjust for timezone if necessary or just compare components
-                return pDate.getUTCMonth() === dueDate.getUTCMonth() &&
-                    pDate.getUTCFullYear() === dueDate.getUTCFullYear();
-            });
-
-            invoices.push({
-                dueDate,
-                amount: selectedContract.total_value,
-                isPaid
-            });
-        }
-        return invoices;
-    };
 
     const openExtraSales = async (client) => {
         setSelectedClient(client);
@@ -235,140 +252,155 @@ const FinancePage = () => {
                 </div>
             </Modal>
 
-            {/* MODAL PAGAMENTOS MENSALIDADES - Versão Faturas Geradas */}
-            <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title={`Faturas: ${selectedClient?.name}`} width="800px">
+            {/* MODAL PAGAMENTOS MENSALIDADES - Versão Grid de Parcelas (Transportada de Contratos) */}
+            <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title={`Faturas: ${selectedClient?.name}`} width="900px">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    <div className="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Vencimento</th>
-                                    <th>Valor Estimado</th>
-                                    <th>Status</th>
-                                    <th>Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {(() => {
-                                    const perPage = 12;
-                                    const displayed = editableInvoices.slice(invoicePage * perPage, (invoicePage + 1) * perPage);
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                        gap: '1.2rem',
+                        maxHeight: '600px',
+                        overflowY: 'auto',
+                        padding: '1rem',
+                        backgroundColor: 'var(--bg-sidebar)',
+                        borderRadius: '0.75rem'
+                    }}>
+                        {editableInvoices.map((inv, idx) => (
+                            <div key={idx} style={{
+                                padding: '1.2rem',
+                                borderRadius: '0.75rem',
+                                border: '1px solid var(--border)',
+                                backgroundColor: inv.isPaid ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-card)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '0.6rem',
+                                position: 'relative',
+                                transition: 'transform 0.2s',
+                                boxShadow: inv.isPaid ? 'none' : '0 4px 6px -1px rgba(0,0,0,0.1)'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)' }}>{inv.label}</span>
+                                    {inv.isPaid && <CheckCircle size={16} color="#10b981" />}
+                                </div>
 
-                                    return displayed.map((inv, idx) => {
-                                        const globalIndex = invoicePage * perPage + idx;
-                                        return (
-                                            <tr key={globalIndex}>
-                                                <td data-label="Vencimento">
-                                                    <input
-                                                        type="date"
-                                                        className="input-field"
-                                                        style={{ padding: '0.4rem', fontSize: '0.85rem' }}
-                                                        value={inv.dueDate}
-                                                        onChange={(e) => handleInvoiceChange(globalIndex, 'dueDate', e.target.value)}
-                                                        disabled={inv.isPaid}
-                                                    />
-                                                </td>
-                                                <td data-label="Valor Estimado">
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                                        <span style={{ fontSize: '0.85rem' }}>R$</span>
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
-                                                            className="input-field"
-                                                            style={{ padding: '0.4rem', fontSize: '0.85rem' }}
-                                                            value={inv.amount}
-                                                            onChange={(e) => handleInvoiceChange(globalIndex, 'amount', parseFloat(e.target.value))}
-                                                            disabled={inv.isPaid}
-                                                        />
-                                                    </div>
-                                                </td>
-                                                <td data-label="Status">
-                                                    <span style={{
-                                                        padding: '0.2rem 0.5rem', borderRadius: '1rem', fontSize: '0.7rem',
-                                                        backgroundColor: inv.isPaid ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                                                        color: inv.isPaid ? '#10b981' : '#ef4444'
-                                                    }}>
-                                                        {inv.isPaid ? 'Pago' : 'Pendente'}
-                                                    </span>
-                                                </td>
-                                                <td data-label="Ação">
-                                                    {!inv.isPaid && (
-                                                        <button onClick={() => handlePayInvoice(inv, globalIndex)} className="btn-primary" style={{ fontSize: '0.9rem', padding: '0.8rem 1.2rem', backgroundColor: '#10b981' }}>
-                                                            Confirmar Pagamento
-                                                        </button>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    });
-                                })()}
-                            </tbody>
-                        </table>
-                    </div>
+                                <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Vencimento</p>
+                                    <p style={{ fontWeight: 700, fontSize: '0.95rem' }}>{format(new Date(inv.dueDate), 'dd/MM/yyyy')}</p>
+                                </div>
 
-                    {/* PAGINAÇÃO */}
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
-                        <button
-                            disabled={invoicePage === 0}
-                            onClick={() => setInvoicePage(p => p - 1)}
-                            className="btn-primary"
-                            style={{ padding: '0.5rem 1rem', opacity: invoicePage === 0 ? 0.5 : 1 }}
-                        >
-                            Anterior
-                        </button>
-                        <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>Página {invoicePage + 1}</span>
-                        <button
-                            disabled={(invoicePage + 1) * 12 >= editableInvoices.length}
-                            onClick={() => setInvoicePage(p => p + 1)}
-                            className="btn-primary"
-                            style={{ padding: '0.5rem 1rem', opacity: (invoicePage + 1) * 12 >= editableInvoices.length ? 0.5 : 1 }}
-                        >
-                            Próxima
-                        </button>
+                                <div>
+                                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Valor</p>
+                                    <p style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)' }}>
+                                        R$ {parseFloat(inv.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                </div>
+
+                                <div style={{ marginTop: '0.5rem' }}>
+                                    {inv.isPaid ? (
+                                        <span style={{
+                                            display: 'block',
+                                            textAlign: 'center',
+                                            padding: '0.5rem',
+                                            borderRadius: '0.5rem',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 800,
+                                            backgroundColor: '#dcfce7',
+                                            color: '#166534'
+                                        }}>PAGO</span>
+                                    ) : (
+                                        <button
+                                            onClick={() => handlePayInvoice(inv, idx)}
+                                            className="btn-primary"
+                                            style={{ width: '100%', padding: '0.6rem', backgroundColor: '#10b981', fontSize: '0.8rem' }}
+                                        >
+                                            Confirmar Recebimento
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </Modal>
 
             {/* MODAL VENDAS/SERVIÇOS AVULSOS */}
-            <Modal isOpen={isExtraSalesModalOpen} onClose={() => setIsExtraSalesModalOpen(false)} title={`Vendas e Serviços: ${selectedClient?.name}`} width="800px">
-                <div className="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Data</th>
-                                <th>Descrição</th>
-                                <th>Valor</th>
-                                <th>Status</th>
-                                <th style={{ width: '150px' }}>Ação</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {extraSales.length === 0 ? (
-                                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '2rem' }}>Nenhuma venda avulsa para este cliente.</td></tr>
-                            ) : extraSales.map(s => (
-                                <tr key={s.id}>
-                                    <td data-label="Data">{format(new Date(s.execution_date), 'dd/MM/yyyy')}</td>
-                                    <td data-label="Descrição">{s.product_description}</td>
-                                    <td data-label="Valor" style={{ fontWeight: 600 }}>R$ {parseFloat(s.price).toFixed(2)}</td>
-                                    <td data-label="Status">
-                                        <span style={{
-                                            padding: '0.2rem 0.5rem', borderRadius: '1rem', fontSize: '0.7rem',
-                                            backgroundColor: s.status === 'Pago' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
-                                            color: s.status === 'Pago' ? '#10b981' : '#f59e0b'
-                                        }}>
-                                            {s.status}
-                                        </span>
-                                    </td>
-                                    <td data-label="Ação">
-                                        {s.status !== 'Pago' && (
-                                            <button onClick={() => markSaleAsPaid(s)} className="btn-primary" style={{ backgroundColor: '#10b981', fontSize: '0.9rem', padding: '0.8rem 1.2rem' }}>
-                                                Marcar Pago
+            <Modal isOpen={isExtraSalesModalOpen} onClose={() => setIsExtraSalesModalOpen(false)} title={`Vendas e Serviços: ${selectedClient?.name}`} width="900px">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    {extraSales.length === 0 ? (
+                        <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Nenhuma venda avulsa para este cliente.</p>
+                    ) : (
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+                            gap: '1.2rem',
+                            maxHeight: '600px',
+                            overflowY: 'auto',
+                            padding: '1rem',
+                            backgroundColor: 'var(--bg-sidebar)',
+                            borderRadius: '0.75rem'
+                        }}>
+                            {extraSales.map(s => (
+                                <div key={s.id} style={{
+                                    padding: '1.2rem',
+                                    borderRadius: '0.75rem',
+                                    border: '1px solid var(--border)',
+                                    backgroundColor: s.status === 'Pago' ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-card)',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '0.6rem',
+                                    position: 'relative',
+                                    boxShadow: s.status === 'Pago' ? 'none' : '0 4px 6px -1px rgba(0,0,0,0.1)'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)' }}>#{s.id} - VAN/SERVIÇO</span>
+                                        {s.status === 'Pago' && <CheckCircle size={16} color="#10b981" />}
+                                    </div>
+
+                                    <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Execução / Venda</p>
+                                        <p style={{ fontWeight: 700, fontSize: '0.95rem' }}>{format(new Date(s.execution_date), 'dd/MM/yyyy')}</p>
+                                    </div>
+
+                                    <div style={{ flex: 1 }}>
+                                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Descrição</p>
+                                        <p style={{ fontSize: '0.85rem', lineHeight: '1.4', color: 'var(--text-main)', fontWeight: 500 }}>
+                                            {s.product_description || 'Itens diversos'}
+                                        </p>
+                                    </div>
+
+                                    <div style={{ marginTop: '0.5rem' }}>
+                                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Valor Total</p>
+                                        <p style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)' }}>
+                                            R$ {parseFloat(s.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+
+                                    <div style={{ marginTop: '0.5rem' }}>
+                                        {s.status === 'Pago' ? (
+                                            <span style={{
+                                                display: 'block',
+                                                textAlign: 'center',
+                                                padding: '0.5rem',
+                                                borderRadius: '0.5rem',
+                                                fontSize: '0.75rem',
+                                                fontWeight: 800,
+                                                backgroundColor: '#dcfce7',
+                                                color: '#166534'
+                                            }}>PAGO</span>
+                                        ) : (
+                                            <button
+                                                onClick={() => markSaleAsPaid(s)}
+                                                className="btn-primary"
+                                                style={{ width: '100%', padding: '0.6rem', backgroundColor: '#10b981', fontSize: '0.8rem' }}
+                                            >
+                                                Confirmar Recebimento
                                             </button>
                                         )}
-                                    </td>
-                                </tr>
+                                    </div>
+                                </div>
                             ))}
-                        </tbody>
-                    </table>
+                        </div>
+                    )}
                 </div>
             </Modal>
         </div>

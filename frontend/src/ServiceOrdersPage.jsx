@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import api from './api';
-import { ClipboardList, CheckCircle, XCircle, Clock, MapPin, Phone, Info } from 'lucide-react';
+import { ClipboardList, CheckCircle, XCircle, Clock, MapPin, Phone, Info, RotateCcw } from 'lucide-react';
 import Modal from './Modal';
+import ModalConfirm from './ModalConfirm';
 import { format, isAfter, startOfDay } from 'date-fns';
 
 const ServiceOrdersPage = () => {
     const [orders, setOrders] = useState([]);
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [tempStatus, setTempStatus] = useState(null);
 
     const fetchOrders = async () => {
         try {
@@ -21,8 +24,16 @@ const ServiceOrdersPage = () => {
     const handleStatusUpdate = async (id, status) => {
         try {
             await api.patch(`/service-orders/${id}`, { status });
+            setIsConfirmModalOpen(false);
             fetchOrders();
+            if (isDetailsModalOpen) setIsDetailsModalOpen(false);
         } catch (err) { alert("Erro ao atualizar status"); }
+    };
+
+    const confirmCancel = (order) => {
+        setSelectedOrder(order);
+        setTempStatus('Cancelado');
+        setIsConfirmModalOpen(true);
     };
 
     const getStatusColor = (status) => {
@@ -79,18 +90,25 @@ const ServiceOrdersPage = () => {
                                 <td data-label="Status" style={{ color: getStatusColor(order.status), fontWeight: 600 }}>{order.status}</td>
                                 <td data-label="Ações">
                                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                                        <button onClick={() => { setSelectedOrder(order); setIsDetailsModalOpen(true); }} className="btn-primary" style={{ padding: '0.8rem', backgroundColor: '#3b82f6' }}>
+                                        <button onClick={() => { setSelectedOrder(order); setIsDetailsModalOpen(true); }} className="btn-primary" style={{ padding: '0.8rem', backgroundColor: '#3b82f6' }} title="Detalhes">
                                             <Info size={22} />
                                         </button>
+
                                         {order.status === 'Pendente' && (
                                             <>
-                                                <button onClick={() => handleStatusUpdate(order.id, 'Feito')} className="btn-primary" style={{ padding: '0.8rem', backgroundColor: '#10b981' }}>
+                                                <button onClick={() => handleStatusUpdate(order.id, 'Feito')} className="btn-primary" style={{ padding: '0.8rem', backgroundColor: '#10b981' }} title="Concluir">
                                                     <CheckCircle size={22} />
                                                 </button>
-                                                <button onClick={() => handleStatusUpdate(order.id, 'Cancelado')} className="btn-primary" style={{ padding: '0.8rem', backgroundColor: '#ef4444' }}>
+                                                <button onClick={() => confirmCancel(order)} className="btn-primary" style={{ padding: '0.8rem', backgroundColor: '#ef4444' }} title="Cancelar">
                                                     <XCircle size={22} />
                                                 </button>
                                             </>
+                                        )}
+
+                                        {order.status !== 'Pendente' && (
+                                            <button onClick={() => handleStatusUpdate(order.id, 'Pendente')} className="btn-primary" style={{ padding: '0.8rem', backgroundColor: '#6b7280' }} title="Reativar / Voltar para Pendente">
+                                                <RotateCcw size={22} />
+                                            </button>
                                         )}
                                     </div>
                                 </td>
@@ -143,6 +161,14 @@ const ServiceOrdersPage = () => {
                     </div>
                 )}
             </Modal>
+
+            <ModalConfirm
+                isOpen={isConfirmModalOpen}
+                onClose={() => setIsConfirmModalOpen(false)}
+                onConfirm={() => handleStatusUpdate(selectedOrder.id, tempStatus)}
+                title="Confirmar Cancelamento"
+                message={`Deseja realmente cancelar a Ordem de Serviço #${selectedOrder?.id} para ${selectedOrder?.client_name}?`}
+            />
         </div>
     );
 };

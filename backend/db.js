@@ -186,7 +186,20 @@ const initDb = async () => {
       "ALTER TABLE inventory_log ADD COLUMN IF NOT EXISTS v_ipi DECIMAL(10,2) DEFAULT 0",
       "ALTER TABLE inventory_log ADD COLUMN IF NOT EXISTS v_pis DECIMAL(10,2) DEFAULT 0",
       "ALTER TABLE inventory_log ADD COLUMN IF NOT EXISTS v_cofins DECIMAL(10,2) DEFAULT 0",
-      "ALTER TABLE inventory_log ADD COLUMN IF NOT EXISTS unit_cost DECIMAL(10,2) DEFAULT 0"
+      "ALTER TABLE inventory_log ADD COLUMN IF NOT EXISTS unit_cost DECIMAL(10,2) DEFAULT 0",
+      "ALTER TABLE extra_sales ADD COLUMN IF NOT EXISTS items JSONB DEFAULT '[]'::jsonb",
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS report_type TEXT DEFAULT '01'",
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS equipment_items JSONB DEFAULT '[]'::jsonb",
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS dosage_regulation TEXT",
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS client_brand TEXT",
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS client_model TEXT",
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS client_serial TEXT",
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS defect_found TEXT",
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS service_performed TEXT",
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS second_signature TEXT",
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS client_city TEXT",
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS client_phone TEXT",
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS client_cnpj TEXT"
     ];
 
     for (const sql of migrations) {
