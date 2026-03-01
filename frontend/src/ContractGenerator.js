@@ -90,6 +90,30 @@ const buildContractPDF = (data) => {
 
     const isServico = data.type === 'Prestação de Serviços';
 
+    const getFirstInvoiceDate = () => {
+        let baseDate;
+        if (data.start_date) {
+            // Se for uma string ISO longa (ex: "2026-02-25T00:00:00.000Z"), extraímos a parte da data
+            let dateStr = data.start_date;
+            if (typeof dateStr === 'string' && dateStr.includes('T')) {
+                dateStr = dateStr.split('T')[0];
+            }
+
+            if (typeof dateStr === 'string' && dateStr.length === 10) {
+                const [year, month, day] = dateStr.split('-');
+                baseDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            } else {
+                baseDate = new Date(data.start_date);
+            }
+        } else {
+            baseDate = new Date();
+        }
+
+        const day = parseInt(data.payment_day, 10) || 1;
+        return new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, day);
+    };
+    const firstInvoiceDateFormatted = format(getFirstInvoiceDate(), 'dd/MM/yyyy');
+
     // --- MODEL START ---
     const title = isServico ? "CONTRATO DE PRESTAÇÃO DE SERVIÇO EM BOMBA DOSADORA" : "CONTRATO DE LOCAÇÃO DE BENS MÓVEIS";
     const rolePartner = isServico ? "CONTRATADA" : "LOCADORA";
@@ -100,11 +124,11 @@ const buildContractPDF = (data) => {
     addText("Pelo presente instrumento, de um lado:", 10, 'left', 'normal', 5);
 
     // PARTNER
-    const partnerText = `${(data.partner?.name || '').toUpperCase()}, ${data.partner?.type || ''}, sediada ${data.partner?.address || ''}, CEP: ${data.partner?.cep || ''}, inscrita no CNPJ/MF sob o nº ${data.partner?.cnpj || ''}, neste ato devidamente representada na forma do seu Certificado da Condição de Microempreendedor Individual, doravante denominada como ${rolePartner}, e de outro lado;`;
+    const partnerText = `${(data.partner?.name || '').toUpperCase()}, ${data.partner?.type || ''}, sediada ${data.partner?.address || ''}, CEP: ${(data.partner?.data?.cep || data.partner?.cep || '')}, inscrita no CNPJ/MF sob o nº ${data.partner?.cnpj || ''}, neste ato devidamente representada na forma do seu Certificado da Condição de Microempreendedor Individual, doravante denominada como ${rolePartner}, e de outro lado;`;
     addText(partnerText, 10, 'justify', 'normal', 10);
 
     // CLIENT
-    const clientText = `${(data.client?.name || '').toUpperCase()}, sediada ${(data.client?.address || '________________')}, CEP: ${(data.client?.cep || '___________')}, inscrita no CNPJ/MF sob o nº ${(data.client?.cnpj || data.client?.cpf || '______________')}, neste ato representada na forma do seu Contrato Social, doravante denominada como ${roleClient}.`;
+    const clientText = `${(data.client?.name || '').toUpperCase()}, sediada ${(data.client?.address || '________________')}, CEP: ${(data.client?.data?.cep || data.client?.cep || '___________')}, inscrita no CNPJ/MF sob o nº ${(data.client?.cnpj || data.client?.cpf || '______________')}, neste ato representada na forma do seu Contrato Social, doravante denominada como ${roleClient}.`;
     addText(clientText, 10, 'justify', 'normal', 10);
 
     const enuciado = isServico
@@ -163,7 +187,7 @@ const buildContractPDF = (data) => {
         addText("CLAUSULA SEXTA – DOS VALORES E DA FORMA DE PAGAMENTO", 10, 'left', 'bold', 5);
         const totalVal = parseFloat(data.total_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
         addText(`6.1 A LOCATÁRIA pagará à LOCADORA a quantia mensal de R$: ${totalVal} pela cessão do(s) Bem(s) descrito na cláusula primeira.`, 10, 'justify', 'normal', 3);
-        addText(`Para tanto, a LOCADORA emitirá exclusivamente por meio de boletos bancário as correspondentes faturas com os vencimentos para todo dia ${data.payment_day} de cada mês, com a primeira fatura iniciando em ${format(new Date(data.start_date || new Date()), 'dd/MM/yyyy')}.`, 10, 'justify', 'normal', 3);
+        addText(`Para tanto, a LOCADORA emitirá exclusivamente por meio de boletos bancário as correspondentes faturas com os vencimentos para todo dia ${data.payment_day} de cada mês, com a primeira fatura iniciando em ${firstInvoiceDateFormatted}.`, 10, 'justify', 'normal', 3);
         addText(`6.2 A cobrança deverá ser encaminhada à LOCATÁRIA, com pelo menos 10 (dez) dias de antecedência do seu vencimento, por meio do e-mail (${data.client?.email || '____________________'}) para que a mesma possa conferir e providenciar o respectivo pagamento.`, 10, 'justify', 'normal', 3);
         addText("6.3 No caso de falta de pagamento no prazo superior a 03 (três) dias da data de vencimento, correrão multa de 2% (dois por cento) e juros de 1% (um por cento) ao mês.", 10, 'justify', 'normal', 3);
         addText("6.4 Os valores dispostos nesta cláusula são fixos e só poderão ser reajustados após 12 (doze) meses de vigência contratual, mediante negociação por meio de Carta Reajuste aprovada e assinada ente as partes. ", 10, 'justify', 'normal', 10);
@@ -213,7 +237,7 @@ const buildContractPDF = (data) => {
         const totalVal = parseFloat(data.total_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
         const valExtenso = valorPorExtenso(data.total_value || 0);
         addText(`5.1 Pelos serviços e obrigações aqui definidas, a CONTRATANTE pagará à CONTRATADA, mensalmente, o valor de R$ ${totalVal} (${valExtenso}).`, 10, 'justify', 'normal', 5);
-        addText(`5.2 Para tanto, A CONTRATADA emitirá exclusivamente por meio de boletos bancários as correspondentes faturas, com vencimentos para todo dia ${data.payment_day} de cada mês, sendo a primeira parcela para dia ${format(new Date(data.start_date || new Date()), 'dd/MM/yyyy')} que deverão ser encaminhadas à CONTRATANTE, com pelo menos 10 (dez) dias de antecedência do seu vencimento, por meio do e-mail (${data.client?.email || '____________________'}) para que esta possa conferir e providenciar o respectivo pagamento.`, 10, 'justify', 'normal', 5);
+        addText(`5.2 Para tanto, A CONTRATADA emitirá exclusivamente por meio de boletos bancários as correspondentes faturas, com vencimentos para todo dia ${data.payment_day} de cada mês, sendo a primeira parcela para dia ${firstInvoiceDateFormatted} que deverão ser encaminhadas à CONTRATANTE, com pelo menos 10 (dez) dias de antecedência do seu vencimento, por meio do e-mail (${data.client?.email || '____________________'}) para que esta possa conferir e providenciar o respectivo pagamento.`, 10, 'justify', 'normal', 5);
         addText("5.3 No caso de falta de pagamento no prazo superior a 03 (três) dias da data de vencimento, correrão multa de 2% (dois por cento) e juros de 1% (um por cento) ao mês.", 10, 'justify', 'normal', 5);
         addText("5.4 Permanecendo a CONTRATANTE na falta de pagamento por prazo superior a 60 (SESSENTA) dias poderá a CONTRATADA rescindir e negativar o presente contrato, junto aos órgãos competentes.", 10, 'justify', 'normal', 3);
         addText("5.5 Os valores dispostos na CLÁUSULA QUINTA 5.1 são fixos, só poderão ser reajustados após vigência contratual, mediante prévia negociação entre as partes conforme CLÁUSULA SEGUNDA 2.1 do referido contrato.", 10, 'justify', 'normal', 10);
@@ -242,7 +266,8 @@ const buildContractPDF = (data) => {
 
     if (cursorY > 210) doc.addPage(), cursorY = 20;
 
-    addText(`GOIÂNIA, ${format(new Date(), 'dd/MM/yyyy')}`, 10, 'center', 'normal', 15);
+    const signingDate = data.created_at ? new Date(data.created_at) : new Date();
+    addText(`GOIÂNIA, ${format(signingDate, 'dd/MM/yyyy')}`, 10, 'center', 'normal', 15);
 
     doc.text("_____________________________________________", 105, cursorY, { align: 'center' });
     doc.text(rolePartner, 105, cursorY + 5, { align: 'center' });

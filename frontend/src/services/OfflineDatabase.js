@@ -279,6 +279,69 @@ class OfflineDatabase {
     }
 
     /**
+     * Marca item da fila como "sincronizando", prevenindo que multiplos 
+     * reloads peguem o mesmo item antes de finalizar.
+     */
+    async markItemAsSyncing(queueId) {
+        if (!this.db) await this.init();
+
+        const transaction = this.db.transaction(['syncQueue'], 'readwrite');
+        const store = transaction.objectStore('syncQueue');
+
+        return new Promise((resolve, reject) => {
+            const getRequest = store.get(queueId);
+            getRequest.onsuccess = () => {
+                const item = getRequest.result;
+                if (item) {
+                    item.status = 'syncing';
+                    item.syncStartTime = Date.now();
+                    const putRequest = store.put(item);
+                    putRequest.onsuccess = () => resolve();
+                    putRequest.onerror = () => reject(putRequest.error);
+                } else {
+                    resolve();
+                }
+            };
+            getRequest.onerror = () => reject(getRequest.error);
+        });
+    }
+
+    /**
+     * Reverte de "syncing" para "pending" os items que ficaram presos por muito 
+     * tempo devido a fechamento da aba no meio de uma sincronizacao pesada.
+     */
+    async resetStuckSyncItems() {
+        if (!this.db) await this.init();
+        try {
+            const transaction = this.db.transaction(['syncQueue'], 'readwrite');
+            const store = transaction.objectStore('syncQueue');
+            const index = store.index('status');
+
+            return new Promise((resolve, reject) => {
+                const request = index.getAll('syncing');
+                request.onsuccess = () => {
+                    const items = request.result;
+                    let count = 0;
+                    const now = Date.now();
+                    items.forEach(item => {
+                        // Se estiver travado por mais de 2 minutos (120000ms), devolve pra pending
+                        if (now - (item.syncStartTime || 0) > 120000) {
+                            item.status = 'pending';
+                            store.put(item);
+                            count++;
+                        }
+                    });
+                    if (count > 0) console.log(`[OfflineDB] Reset ${count} stuck syncing items to pending`);
+                    resolve(count);
+                };
+                request.onerror = () => reject(request.error);
+            });
+        } catch (error) {
+            console.warn('[OfflineDB] Could not reset stuck items:', error);
+        }
+    }
+
+    /**
      * Limpa itens sincronizados antigos
      */
     async cleanSyncedItems(daysOld = 7) {

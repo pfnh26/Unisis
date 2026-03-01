@@ -194,7 +194,8 @@ export const generateReportPDF = async (data, imageBlobs = []) => {
     let cursorY = 10;
 
     // Set document properties
-    const filename = `Relatorio_${data.client_name || 'Sem_Nome'}_${format(new Date(), 'dd-MM-yyyy')}`.replace(/\s+/g, '_');
+    const reportDate = data.created_at ? new Date(data.created_at) : new Date();
+    const filename = `Relatorio_${data.client_name || 'Sem_Nome'}_${format(reportDate, 'dd-MM-yyyy')}`.replace(/\s+/g, '_');
     doc.setProperties({
         title: filename,
         subject: 'Relatório de Visita NCH',
@@ -254,7 +255,7 @@ export const generateReportPDF = async (data, imageBlobs = []) => {
     drawGrayBox(doc, margin + 106, cursorY, 20, rowH, "CÓDIGO");
     drawValueBox(doc, margin + 126, cursorY, 15, rowH, data.client_id || '');
     drawGrayBox(doc, margin + 141, cursorY, 20, rowH, "DATA");
-    drawValueBox(doc, margin + 161, cursorY, 29, rowH, format(new Date(), 'dd/MM/yyyy'), false, true);
+    drawValueBox(doc, margin + 161, cursorY, 29, rowH, format(reportDate, 'dd/MM/yyyy'), false, true);
 
     cursorY += rowH;
 
@@ -453,7 +454,8 @@ const generateReport02PDF = async (data, imageBlobs) => {
     };
 
     const rowH = 6;
-    const dateStr = format(new Date(), 'dd / MM / yyyy');
+    const reportDate = data.created_at ? new Date(data.created_at) : new Date();
+    const dateStr = format(reportDate, 'dd / MM / yyyy');
 
     // Reset colors to default black and white
     doc.setTextColor(0, 0, 0);
@@ -461,7 +463,7 @@ const generateReport02PDF = async (data, imageBlobs) => {
     doc.setFillColor(255, 255, 255);
 
     drawCell(margin, cursorY, 60, rowH, "DATA", dateStr);
-    drawCell(margin + 60, cursorY, gridW - 60, rowH, "CNPJ / CPF", ""); // Removed client_cnpj as requested
+    drawCell(margin + 60, cursorY, gridW - 60, rowH, "CNPJ / CPF", data.client_cnpj || "");
     cursorY += rowH;
 
     drawCell(margin, cursorY, 115, rowH, "CLIENTE", data.client_name);
@@ -562,6 +564,7 @@ const generateReport02PDF = async (data, imageBlobs) => {
     doc.text("OBSERVAÇÕES:", margin + 72, cursorY + 4);
     cursorY += rowH;
 
+    const equipmentTableStartY = cursorY;
     data.equipment_items.forEach(item => {
         doc.rect(margin, cursorY, 35, rowH);
         doc.setFontSize(7);
@@ -587,12 +590,29 @@ const generateReport02PDF = async (data, imageBlobs) => {
         }
         doc.text("SUBSTITUÍDO", margin + 52, cursorY + 4);
 
-        // Obs Box
-        doc.rect(margin + 70, cursorY, gridW - 70, rowH);
-        doc.setFontSize(7);
-        doc.text(doc.splitTextToSize(item.obs || "", gridW - 74)[0] || "", margin + 72, cursorY + 4);
         cursorY += rowH;
     });
+
+    // Draw a single big rectangle for the entire Observations column
+    const totalEquipmentH = data.equipment_items.length * rowH;
+    doc.rect(margin + 70, equipmentTableStartY, gridW - 70, totalEquipmentH);
+
+    // Render consolidated observations if available
+    if (data.equipment_obs) {
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "normal");
+        const wrappedObs = doc.splitTextToSize(data.equipment_obs, gridW - 74);
+        doc.text(wrappedObs, margin + 72, equipmentTableStartY + 4);
+    } else {
+        // Fallback for old data or item-specific obs
+        doc.setFontSize(7);
+        data.equipment_items.forEach((item, idx) => {
+            if (item.obs) {
+                const yPos = equipmentTableStartY + (idx * rowH) + 4;
+                doc.text(doc.splitTextToSize(item.obs, gridW - 74)[0] || "", margin + 72, yPos);
+            }
+        });
+    }
 
     // Manutenção Equipamento Cliente
     doc.setFillColor(245, 245, 245);

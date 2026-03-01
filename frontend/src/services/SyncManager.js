@@ -25,6 +25,9 @@ class SyncManager {
         this.db = new OfflineDatabase();
         await this.db.init();
 
+        // Volta itens que porventura nas sincronizacoes passadas ficaram "syncing" no meio do caminho porque a aba foi fechada
+        await this.db.resetStuckSyncItems();
+
         // Monitorar mudanças de conectividade
         window.addEventListener('online', () => this.handleOnline());
         window.addEventListener('offline', () => this.handleOffline());
@@ -167,6 +170,9 @@ class SyncManager {
             let errorCount = 0;
 
             for (const item of pendingItems) {
+                // Ao colocar como 'syncing', o sistema não pegará o item se o user atualizar a pagina no meio do request de rede longo!
+                await this.db.markItemAsSyncing(item.queueId);
+
                 try {
                     const serverResponse = await this.syncItem(item);
 
@@ -275,7 +281,8 @@ class SyncManager {
         }
 
         const response = await api.post(endpoint, payload, {
-            headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {}
+            headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+            _isSyncRequest: true
         });
         return response.data;
     }
@@ -291,7 +298,7 @@ class SyncManager {
         delete cleanData.createdAt;
         delete cleanData.updatedAt;
 
-        const response = await api.patch(`${endpoint}/${itemId}`, cleanData);
+        const response = await api.patch(`${endpoint}/${itemId}`, cleanData, { _isSyncRequest: true });
         return response.data;
     }
 
@@ -299,7 +306,7 @@ class SyncManager {
      * Sincroniza exclusão
      */
     async syncDelete(endpoint, itemId) {
-        const response = await api.delete(`${endpoint}/${itemId}`);
+        const response = await api.delete(`${endpoint}/${itemId}`, { _isSyncRequest: true });
         return response.data;
     }
 
@@ -337,6 +344,7 @@ class SyncManager {
                 if (item) {
                     item.retryCount = (item.retryCount || 0) + 1;
                     item.lastRetry = new Date().toISOString();
+                    item.status = 'pending';
 
                     const putRequest = store.put(item);
                     putRequest.onsuccess = () => resolve();

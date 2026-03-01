@@ -31,7 +31,9 @@ class ReportController {
             const logDetails = `Cliente: ${clientName} | Tipo: ${visitType} | Relatório ID: ${report.id}`;
 
             console.log("Logging Report Activity:", logDetails);
-            await this.logActivity(userId, 'Criar Relatório', logDetails);
+            if (!report._alreadyExists) {
+                await this.logActivity(userId, 'Criar Relatório', logDetails);
+            }
             res.json(report);
         } catch (err) {
             console.error(err);

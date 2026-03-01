@@ -197,9 +197,10 @@ const initDb = async () => {
       "ALTER TABLE reports ADD COLUMN IF NOT EXISTS defect_found TEXT",
       "ALTER TABLE reports ADD COLUMN IF NOT EXISTS service_performed TEXT",
       "ALTER TABLE reports ADD COLUMN IF NOT EXISTS second_signature TEXT",
-      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS client_city TEXT",
-      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS client_phone TEXT",
-      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS client_cnpj TEXT"
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS client_cnpj TEXT",
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS offline_hash TEXT UNIQUE",
+      "ALTER TABLE contracts ADD COLUMN IF NOT EXISTS offline_hash TEXT UNIQUE",
+      "ALTER TABLE reports ADD COLUMN IF NOT EXISTS equipment_obs TEXT"
     ];
 
     for (const sql of migrations) {

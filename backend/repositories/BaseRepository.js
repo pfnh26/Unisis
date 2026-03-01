@@ -20,6 +20,17 @@ class BaseRepository {
         return result.rows[0];
     }
 
+    async findOne(options = {}) {
+        const { where, params = [] } = options;
+        let query = `SELECT * FROM ${this.table}`;
+        if (where) {
+            query += ` WHERE ${where}`;
+        }
+        query += ` LIMIT 1`;
+        const result = await this.pool.query(query, params);
+        return result.rows[0];
+    }
+
     async create(data) {
         const keys = Object.keys(data);
         const values = Object.values(data);

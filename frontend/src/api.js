@@ -119,6 +119,11 @@ api.interceptors.response.use(
 
         // Se for operação de escrita (POST, PUT, PATCH, DELETE) salvar na fila
         if (['post', 'put', 'patch', 'delete'].includes(config.method)) {
+            // Evita duplicação infinita bloqueando requisições originadas do SyncManager
+            if (config._isSyncRequest) {
+                return Promise.reject(error);
+            }
+
             // Tratamento especial para upload de imagem individual em modo offline
             if (config.url.includes('/reports/upload-image')) {
                 let base64 = 'offline-placeholder';

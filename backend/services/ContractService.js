@@ -12,6 +12,18 @@ class ContractService {
     }
 
     async createContract(data) {
+        // Deduplicação pelo offline_hash
+        if (data.offline_hash) {
+            const existing = await this.contractRepository.findOne({
+                where: 'offline_hash = $1',
+                params: [data.offline_hash]
+            });
+            if (existing) {
+                console.log(`[ContractService] Duplicate contract detected with hash ${data.offline_hash}. Returning existing ID ${existing.id}`);
+                return { ...existing, _alreadyExists: true };
+            }
+        }
+
         // Sanitize IDs
         data.client_id = data.client_id || null;
         data.partner_id = data.partner_id || null;

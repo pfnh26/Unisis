@@ -130,3 +130,21 @@ sudo chmod -R 777 /var/www/unisis/backend/uploads
 sudo mkdir -p /var/www/unisis/backend/services/temp_docx
 sudo chmod -R 777 /var/www/unisis/backend/services/temp_docx
 Pronto! Agora você pode acessar o sistema digitando o IP do seu servidor Ubuntu no navegador. Se precisar atualizar o sistema no futuro, basta dar um git pull, rodar npm install e reiniciar o backend com pm2 restart unisis-backend.
+
+
+git commit -m "v2.0"
+
+git push
+
+server
+cd /var/www/unisis
+git reset --hard origin/main
+git pull origin main
+
+cd backend
+npm install --production
+pm2 restart unisis-backend
+
+cd /var/www/unisis/frontend
+npm install
+npm run build

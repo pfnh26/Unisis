@@ -22,7 +22,9 @@ class ContractController {
             const createdContract = contracts.find(c => c.id === contract.id);
             const clientName = createdContract?.client_name || `ID: ${req.body.client_id}`;
 
-            this.logActivity(req.user.id || req.user.userId, 'Criar Contrato', `Cliente: ${clientName} | Tipo: ${req.body.type} | Valor: R$ ${parseFloat(req.body.total_value).toFixed(2)}`);
+            if (!contract._alreadyExists) {
+                this.logActivity(req.user.id || req.user.userId, 'Criar Contrato', `Cliente: ${clientName} | Tipo: ${req.body.type} | Valor: R$ ${parseFloat(req.body.total_value).toFixed(2)}`);
+            }
             res.status(201).json(contract);
         } catch (err) {
             res.status(400).json({ error: err.message });

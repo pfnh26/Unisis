@@ -47,7 +47,8 @@ const ReportModal = ({ isOpen, onClose, onSave, reportToEdit }) => {
         client_serial: '',
         defect_found: '',
         service_performed: '',
-        second_signature: null
+        second_signature: null,
+        equipment_obs: ''
     });
 
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
@@ -232,7 +233,7 @@ const ReportModal = ({ isOpen, onClose, onSave, reportToEdit }) => {
                 }
             }
 
-            const finalData = { ...formData, images: uploadedUrls };
+            const finalData = { ...formData, images: uploadedUrls, offline_hash: Date.now().toString() + Math.random().toString(36).substring(2, 7) };
 
             if (reportToEdit) {
                 await api.patch(`/reports/${reportToEdit.id}`, finalData);
@@ -295,16 +296,40 @@ const ReportModal = ({ isOpen, onClose, onSave, reportToEdit }) => {
                         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
                             <div style={{ position: 'relative', flex: 1 }}>
                                 <Search style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} size={16} />
-                                <input type="text" className="input-field" style={{ paddingLeft: '2.5rem' }} placeholder="Nome ou CNPJ/CPF..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                                <input type="text" className="input-field" style={{ paddingLeft: '2.5rem' }} placeholder="Nome ou CNPJ/CPF..."
+                                    value={searchTerm}
+                                    onChange={e => {
+                                        setSearchTerm(e.target.value);
+                                        if (formData.client_id) handleSelectClient('');
+                                    }}
+                                />
+                                {searchTerm && !formData.client_id && filteredClients.length > 0 && (
+                                    <ul style={{ position: 'absolute', zIndex: 50, width: '100%', maxHeight: '200px', overflowY: 'auto', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '0.5rem', marginTop: '0.25rem', boxShadow: 'var(--shadow-lg)', padding: '0.5rem 0' }}>
+                                        {filteredClients.slice(0, 10).map(cl => (
+                                            <li key={cl.id}
+                                                style={{ padding: '0.5rem 1rem', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: '0.9rem' }}
+                                                onClick={() => {
+                                                    handleSelectClient(cl.id);
+                                                    setSearchTerm(cl.name);
+                                                }}
+                                                onMouseEnter={e => e.target.style.backgroundColor = 'var(--bg-sidebar)'}
+                                                onMouseLeave={e => e.target.style.backgroundColor = 'transparent'}
+                                            >
+                                                <span style={{ fontWeight: 'bold' }}>#{cl.id}</span> - {cl.name} <br />
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{cl.cnpj || cl.cpf}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
                             </div>
                             <button type="button" onClick={() => setIsClientModalOpen(true)} className="btn-primary" style={{ backgroundColor: '#10b981', padding: '0.5rem' }}>
                                 <Plus size={20} />
                             </button>
                         </div>
-                        <select className="input-field" value={formData.client_id} onChange={e => handleSelectClient(e.target.value)} required>
-                            <option value="">-- Selecione o Cliente na Lista --</option>
-                            {filteredClients.map(cl => <option key={cl.id} value={cl.id}>{cl.name} ({cl.cnpj || cl.cpf || 'S/D'})</option>)}
-                        </select>
+                        {!formData.client_id && searchTerm && filteredClients.length === 0 && (
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem' }}>Nenhum cliente encontrado.</p>
+                        )}
+                        <input type="hidden" value={formData.client_id || ''} required />
                     </div>
 
                     <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.25rem', backgroundColor: 'var(--bg-sidebar)', borderRadius: '0.75rem', marginBottom: '0.5rem' }}>
@@ -384,7 +409,7 @@ const ReportModal = ({ isOpen, onClose, onSave, reportToEdit }) => {
                                     {formData.equipment_items.map((item, idx) => (
                                         <div key={idx} style={{ padding: '1rem', backgroundColor: 'var(--bg-sidebar)', borderRadius: '0.5rem', border: '1px solid var(--border)' }}>
                                             <div style={{ fontWeight: 700, marginBottom: '0.5rem', fontSize: '0.8rem' }}>{item.name}</div>
-                                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                                                 {['OK', 'SUBSTITUÍDO'].map(s => (
                                                     <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
                                                         <input type="radio" name={`status-${idx}`} checked={item.status === s} onChange={() => handleEquipItemChange(idx, 'status', s)} />
@@ -392,7 +417,6 @@ const ReportModal = ({ isOpen, onClose, onSave, reportToEdit }) => {
                                                     </label>
                                                 ))}
                                             </div>
-                                            <input className="input-field" style={{ padding: '0.4rem', fontSize: '0.8rem' }} placeholder="Observações..." value={item.obs} onChange={(e) => handleEquipItemChange(idx, 'obs', e.target.value)} />
                                         </div>
                                     ))}
                                 </div>
@@ -400,7 +424,7 @@ const ReportModal = ({ isOpen, onClose, onSave, reportToEdit }) => {
 
                             <div style={{ gridColumn: 'span 2' }}>
                                 <label className="label">Regulagem / Dosador</label>
-                                <div style={{ display: 'flex', gap: '1rem' }}>
+                                <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.5rem' }}>
                                     {['20%', '100%'].map(v => (
                                         <label key={v} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
                                             <input type="radio" name="dosage" checked={formData.dosage_regulation === v} onChange={() => setFormData({ ...formData, dosage_regulation: v })} />
@@ -408,6 +432,9 @@ const ReportModal = ({ isOpen, onClose, onSave, reportToEdit }) => {
                                         </label>
                                     ))}
                                 </div>
+                                <input className="input-field" style={{ padding: '0.4rem', fontSize: '0.8rem' }} placeholder="Observações do Equipamento em Comodato..." value={formData.equipment_obs} onChange={(e) => {
+                                    setFormData({ ...formData, equipment_obs: e.target.value });
+                                }} />
                             </div>
 
                             <div style={{ gridColumn: 'span 2', padding: '1rem', backgroundColor: 'var(--bg-sidebar)', borderRadius: '0.5rem' }}>

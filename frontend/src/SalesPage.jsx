@@ -287,16 +287,43 @@ const SalesPage = () => {
                     <div className="responsive-form-grid">
                         <div style={{ gridColumn: 'span 2' }}>
                             <label className="label">Pesquisar Cliente</label>
-                            <input className="input-field" placeholder="Nome ou CNPJ..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} />
-                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                                <select className="input-field" value={newSale.client_id} onChange={e => setNewSale({ ...newSale, client_id: e.target.value })} required style={{ flex: 1 }}>
-                                    <option value="">-- Selecionar Cliente --</option>
-                                    {filteredClients.map(cl => <option key={cl.id} value={cl.id}>[#{cl.id}] {cl.name}</option>)}
-                                </select>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <div style={{ position: 'relative', flex: 1 }}>
+                                    <Search style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} size={16} />
+                                    <input type="text" className="input-field" style={{ paddingLeft: '2.5rem' }} placeholder="Nome ou CNPJ/CPF..."
+                                        value={clientSearch}
+                                        onChange={e => {
+                                            setClientSearch(e.target.value);
+                                            if (newSale.client_id) setNewSale({ ...newSale, client_id: '' });
+                                        }}
+                                    />
+                                    {clientSearch && !newSale.client_id && filteredClients.length > 0 && (
+                                        <ul style={{ position: 'absolute', zIndex: 50, width: '100%', maxHeight: '200px', overflowY: 'auto', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '0.5rem', marginTop: '0.25rem', boxShadow: 'var(--shadow-lg)', padding: '0.5rem 0' }}>
+                                            {filteredClients.slice(0, 10).map(cl => (
+                                                <li key={cl.id}
+                                                    style={{ padding: '0.5rem 1rem', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: '0.9rem' }}
+                                                    onClick={() => {
+                                                        setNewSale({ ...newSale, client_id: cl.id });
+                                                        setClientSearch(cl.name);
+                                                    }}
+                                                    onMouseEnter={e => e.target.style.backgroundColor = 'var(--bg-sidebar)'}
+                                                    onMouseLeave={e => e.target.style.backgroundColor = 'transparent'}
+                                                >
+                                                    <span style={{ fontWeight: 'bold' }}>#{cl.id}</span> - {cl.name} <br />
+                                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{cl.cnpj || cl.cpf}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
                                 <button type="button" onClick={() => setIsClientModalOpen(true)} className="btn-primary" style={{ backgroundColor: '#10b981', padding: '0.5rem' }}>
                                     <Plus size={20} />
                                 </button>
                             </div>
+                            {!newSale.client_id && clientSearch && filteredClients.length === 0 && (
+                                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem' }}>Nenhum cliente encontrado.</p>
+                            )}
+                            <input type="hidden" value={newSale.client_id || ''} required />
                         </div>
 
                         <div className="mobile-full-width">

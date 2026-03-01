@@ -12,6 +12,18 @@ class ReportService {
     }
 
     async createReport(data) {
+        // Deduplicação pelo offline_hash
+        if (data.offline_hash) {
+            const existing = await this.reportRepository.findOne({
+                where: 'offline_hash = $1',
+                params: [data.offline_hash]
+            });
+            if (existing) {
+                console.log(`[ReportService] Duplicate report detected with hash ${data.offline_hash}. Returning existing ID ${existing.id}`);
+                return { ...existing, _alreadyExists: true };
+            }
+        }
+
         // Processar imagens: se for base64 (capturado offline), salvar como arquivo
         const processedImages = [];
         if (data.images && Array.isArray(data.images)) {
@@ -95,7 +107,9 @@ class ReportService {
             second_signature: secondSignatureUrl,
             client_city: data.client_city,
             client_phone: data.client_phone,
-            client_cnpj: data.client_cnpj
+            client_cnpj: data.client_cnpj,
+            offline_hash: data.offline_hash,
+            equipment_obs: data.equipment_obs
         };
         return await this.reportRepository.create(reportData);
     }
@@ -190,7 +204,8 @@ class ReportService {
             second_signature: secondSignatureUrl,
             client_city: data.client_city,
             client_phone: data.client_phone,
-            client_cnpj: data.client_cnpj
+            client_cnpj: data.client_cnpj,
+            equipment_obs: data.equipment_obs
         };
 
         return await this.reportRepository.update(id, updates);

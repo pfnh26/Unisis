@@ -1,7 +1,14 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 
 const Modal = ({ isOpen, onClose, title, children, maxWidth = '500px' }) => {
+    const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+
+    useEffect(() => {
+        const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
     if (!isOpen) return null;
 
     return (
@@ -18,7 +25,9 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = '500px' }) => {
             justifyContent: 'center',
             zIndex: 1000,
             padding: '1rem'
-        }} onClick={onClose}>
+        }} onClick={(e) => {
+            if (!isDesktop) onClose(e);
+        }}>
             <div style={{
                 backgroundColor: 'var(--bg-card)',
                 color: 'var(--text-main)',
