@@ -513,3 +513,15 @@ body.dark tr:hover {
   width: 24px !important;
   height: 24px !important;
 }
+
+.inner-scroll-container {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .inner-scroll-container {
+    max-height: unset !important;
+    overflow-y: visible !important;
+  }
+}

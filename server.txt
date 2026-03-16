@@ -136,6 +136,10 @@ git commit -m "v2.0"
 
 git push
 
+git add .
+git commit -m "mensagem"
+git push
+
 server
 cd /var/www/unisis
 git reset --hard origin/main

@@ -26,7 +26,7 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = '500px' }) => {
             zIndex: 1000,
             padding: '1rem'
         }} onClick={(e) => {
-            if (!isDesktop) onClose(e);
+            // Removida a lógica de fechar ao clicar fora, conforme solicitado
         }}>
             <div style={{
                 backgroundColor: 'var(--bg-card)',

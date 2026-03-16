@@ -3,11 +3,14 @@ import api from './api';
 import { Search, CreditCard, ShoppingBag, CheckCircle, Clock, Info, ArrowLeft } from 'lucide-react';
 import Modal from './Modal';
 import { format, addMonths, isSameMonth, isSameYear } from 'date-fns';
+import { FileText } from 'lucide-react';
+import { generateInvoicePDF } from './InvoiceGenerator';
 
 const FinancePage = () => {
     const [clients, setClients] = useState([]);
     const [search, setSearch] = useState('');
     const [selectedClient, setSelectedClient] = useState(null);
+    const [partners, setPartners] = useState([]);
 
     // Monthly Fees (Contracts) States
     const [isContractsModalOpen, setIsContractsModalOpen] = useState(false);
@@ -34,6 +37,16 @@ const FinancePage = () => {
         const timer = setTimeout(fetchData, 500);
         return () => clearTimeout(timer);
     }, [search]);
+
+    useEffect(() => {
+        const fetchPartners = async () => {
+            try {
+                const { data } = await api.get('/partners');
+                setPartners(data);
+            } catch (err) { console.error(err); }
+        };
+        fetchPartners();
+    }, []);
 
     const openContracts = async (client) => {
         setSelectedClient(client);
@@ -145,6 +158,27 @@ const FinancePage = () => {
         }
     };
 
+    const handleDownloadPDF = async (invoice) => {
+        try {
+            const partner = partners.find(p => p.id === selectedContract.partner_id) || {};
+            // We need to inject the full contract and partner info if missing
+            const fullInvoice = {
+                ...invoice,
+                id: invoice.id || Math.floor(Math.random() * 100000), // Fallback if no ID
+                contract: {
+                    ...selectedContract,
+                    client: selectedClient,
+                    partner: partner
+                }
+            };
+            const blobUrl = await generateInvoicePDF(fullInvoice);
+            window.open(blobUrl, '_blank');
+        } catch (err) {
+            console.error("Erro ao gerar PDF:", err);
+            alert("Erro ao gerar PDF da fatura.");
+        }
+    };
+
 
 
     const openExtraSales = async (client) => {
@@ -222,7 +256,7 @@ const FinancePage = () => {
 
             {/* MODAL CONTRATOS (MENSALIDADES) */}
             <Modal isOpen={isContractsModalOpen} onClose={() => setIsContractsModalOpen(false)} title={`Contratos Ativos: ${selectedClient?.name}`}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="inner-scroll-container" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     {clientContracts.length === 0 ? (
                         <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Nenhum contrato ativo para este cliente.</p>
                     ) : (
@@ -253,14 +287,12 @@ const FinancePage = () => {
             </Modal>
 
             {/* MODAL PAGAMENTOS MENSALIDADES - Versão Grid de Parcelas (Transportada de Contratos) */}
-            <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title={`Faturas: ${selectedClient?.name}`} width="900px">
+            <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title={`Faturas: ${selectedClient?.name}`} maxWidth="900px">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    <div style={{
+                    <div className="inner-scroll-container" style={{
                         display: 'grid',
                         gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
                         gap: '1.2rem',
-                        maxHeight: '600px',
-                        overflowY: 'auto',
                         padding: '1rem',
                         backgroundColor: 'var(--bg-sidebar)',
                         borderRadius: '0.75rem'
@@ -280,19 +312,31 @@ const FinancePage = () => {
                             }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)' }}>{inv.label}</span>
-                                    {inv.isPaid && <CheckCircle size={16} color="#10b981" />}
+                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                        {inv.isPaid && <CheckCircle size={16} color="#10b981" />}
+                                    </div>
                                 </div>
 
                                 <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
                                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Vencimento</p>
-                                    <p style={{ fontWeight: 700, fontSize: '0.95rem' }}>{format(new Date(inv.dueDate), 'dd/MM/yyyy')}</p>
+                                    <p style={{ fontWeight: 700, fontSize: '0.95rem' }}>{inv.dueDate.split('-').reverse().join('/')}</p>
                                 </div>
 
                                 <div>
                                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Valor</p>
-                                    <p style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)' }}>
-                                        R$ {parseFloat(inv.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                    </p>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                                        <p style={{ fontWeight: 800, fontSize: '1.2rem', color: 'var(--primary)' }}>
+                                            R$ {parseFloat(inv.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                        <button
+                                            onClick={() => handleDownloadPDF(inv)}
+                                            className="btn-primary"
+                                            style={{ padding: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                            title="Ver PDF da Fatura"
+                                        >
+                                            <FileText size={22} />
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div style={{ marginTop: '0.5rem' }}>
@@ -324,17 +368,15 @@ const FinancePage = () => {
             </Modal>
 
             {/* MODAL VENDAS/SERVIÇOS AVULSOS */}
-            <Modal isOpen={isExtraSalesModalOpen} onClose={() => setIsExtraSalesModalOpen(false)} title={`Vendas e Serviços: ${selectedClient?.name}`} width="900px">
+            <Modal isOpen={isExtraSalesModalOpen} onClose={() => setIsExtraSalesModalOpen(false)} title={`Vendas e Serviços: ${selectedClient?.name}`} maxWidth="900px">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                     {extraSales.length === 0 ? (
                         <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Nenhuma venda avulsa para este cliente.</p>
                     ) : (
-                        <div style={{
+                        <div className="inner-scroll-container" style={{
                             display: 'grid',
                             gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
                             gap: '1.2rem',
-                            maxHeight: '600px',
-                            overflowY: 'auto',
                             padding: '1rem',
                             backgroundColor: 'var(--bg-sidebar)',
                             borderRadius: '0.75rem'

@@ -282,7 +282,7 @@ const SalesPage = () => {
                 </table>
             </div>
 
-            <Modal isOpen={isAddModalOpen} onClose={() => { setIsAddModalOpen(false); setPreviewSale(null); }} title={previewSale ? "Preview da Venda" : (editingSaleId ? "Editar Venda" : "Nova Venda Avulsa")} width="900px">
+            <Modal isOpen={isAddModalOpen} onClose={() => { setIsAddModalOpen(false); setPreviewSale(null); }} title={previewSale ? "Preview da Venda" : (editingSaleId ? "Editar Venda" : "Nova Venda Avulsa")} maxWidth="900px">
                 {!previewSale ? (
                     <div className="responsive-form-grid">
                         <div style={{ gridColumn: 'span 2' }}>
