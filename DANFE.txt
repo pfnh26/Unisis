@@ -1,0 +1,461 @@
+import os
+import re
+import base64
+import gzip
+import datetime
+import xml.etree.ElementTree as ET
+
+from pynfe.processamento.comunicacao import ComunicacaoSefaz
+from pynfe.processamento.assinatura import AssinaturaA1
+from pynfe.utils import etree as pynfe_etree
+
+# ─────────────────────────────────────────────
+#  CONFIGURAÇÕES  (lidas de dados.txt)
+# ─────────────────────────────────────────────
+BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
+CERT_FILE = os.path.join(BASE_DIR, "certificado.p12")
+
+# Mapa UF código → sigla
+MAPA_UF = {
+    '11':'RO','12':'AC','13':'AM','14':'RR','15':'PA','16':'AP','17':'TO',
+    '21':'MA','22':'PI','23':'CE','24':'RN','25':'PB','26':'PE','27':'AL',
+    '28':'SE','29':'BA','31':'MG','32':'ES','33':'RJ','35':'SP',
+    '41':'PR','42':'SC','43':'RS','50':'MS','51':'MT','52':'GO','53':'DF',
+}
+
+EVENTOS = {
+    '1': ('210200', 'Confirmacao da Operacao'),
+    '2': ('210210', 'Ciencia da Operacao'),
+    '3': ('210220', 'Operacao nao Realizada'),
+    '4': ('210240', 'Desconhecimento da Operacao'),
+}
+
+
+# ─────────────────────────────────────────────
+#  HELPERS
+# ─────────────────────────────────────────────
+def limpar(s):
+    return re.sub(r'[^0-9]', '', s)
+
+def parse_dados_txt():
+    path = os.path.join(BASE_DIR, "dados.txt")
+    data = {}
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            if '=' in line:
+                k, v = line.split('=', 1)
+                data[k.strip().upper()] = v.strip()
+    return data
+
+def find_tag(xml_str, tag):
+    m = re.search(rf'<(?:[^:>]+:)?{re.escape(tag)}[^>]*>(.*?)</(?:[^:>]+:)?{re.escape(tag)}>', xml_str)
+    return m.group(1).strip() if m else None
+
+def separador(titulo=''):
+    linha = '─' * 58
+    if titulo:
+        print(f"\n┌{linha}┐")
+        print(f"│  {titulo:<56}│")
+        print(f"└{linha}┘")
+    else:
+        print(f"{'─'*60}")
+
+
+# ─────────────────────────────────────────────
+#  1. CONSULTA DE STATUS
+# ─────────────────────────────────────────────
+def consultar_status(chave, cert, senha, uf_emitente):
+    separador("🔍  CONSULTA DE STATUS NA SEFAZ")
+    try:
+        con = ComunicacaoSefaz(uf=uf_emitente, certificado=cert,
+                               certificado_senha=senha, homologacao=False)
+        resp = con.consulta_nota(modelo='nfe', chave=chave)
+
+        c_stat  = find_tag(resp.text, 'cStat')
+        x_motiv = find_tag(resp.text, 'xMotivo')
+        n_prot  = find_tag(resp.text, 'nProt')
+        dh_rec  = find_tag(resp.text, 'dhRecbto')
+
+        status_map = {'100': '✅ AUTORIZADA', '101': '🛑 CANCELADA',
+                      '110': '⚠️  DENEGADA',  '150': '✅ AUTORIZADA (fora prazo)'}
+        print(f"  Status     : {status_map.get(c_stat, c_stat)} – {x_motiv}")
+        if n_prot:
+            print(f"  Protocolo  : {n_prot}")
+        if dh_rec:
+            print(f"  Recebimento: {dh_rec}")
+
+        # Salva XML de status
+        out = os.path.join(BASE_DIR, f"status_{chave}.xml")
+        with open(out, 'w', encoding='utf-8') as f:
+            f.write(resp.text)
+        print(f"  XML salvo  : {os.path.basename(out)}")
+        return resp.text
+    except Exception as e:
+        print(f"  ❌ Erro: {e}")
+        return None
+
+
+# ─────────────────────────────────────────────
+#  2. MANIFESTAÇÃO DO DESTINATÁRIO
+# ─────────────────────────────────────────────
+def manifestar(chave, cert, senha, cnpj, tp_evento, desc_evento, uf_comprador='GO'):
+    separador(f"📋  MANIFESTAÇÃO – {desc_evento}")
+
+    # Código de órgão para manifestação = 91 (Ambiente Nacional)
+    c_orgao  = '91'
+    n_seq    = '1'
+    dh_evento = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S') + '-03:00'
+
+    # Monta ID único
+    id_evento = f"ID{tp_evento}{chave}{n_seq.zfill(2)}"
+
+    # Monta XML do evento
+    NS_NFE = 'http://www.portalfiscal.inf.br/nfe'
+    evento = pynfe_etree.Element('evento', versao='1.00', xmlns=NS_NFE)
+    inf    = pynfe_etree.SubElement(evento, 'infEvento', Id=id_evento)
+
+    pynfe_etree.SubElement(inf, 'cOrgao').text    = c_orgao
+    pynfe_etree.SubElement(inf, 'tpAmb').text     = '1'        # Produção
+    pynfe_etree.SubElement(inf, 'CNPJ').text      = cnpj
+    pynfe_etree.SubElement(inf, 'chNFe').text     = chave
+    pynfe_etree.SubElement(inf, 'dhEvento').text  = dh_evento
+    pynfe_etree.SubElement(inf, 'tpEvento').text  = tp_evento
+    pynfe_etree.SubElement(inf, 'nSeqEvento').text = n_seq
+    pynfe_etree.SubElement(inf, 'verEvento').text = '1.00'
+
+    det = pynfe_etree.SubElement(inf, 'detEvento', versao='1.00')
+    pynfe_etree.SubElement(det, 'descEvento').text = desc_evento
+
+    # Assina o evento com o certificado
+    # assinar() detecta o Id automaticamente via xpath — não passa 'uri'
+    try:
+        a1  = AssinaturaA1(cert, senha)
+        evt_assinado = a1.assinar(evento)
+    except Exception as e:
+        print(f"  ❌ Erro ao assinar: {e}")
+        return None
+
+    # Envia via Ambiente Nacional (uf_comprador define cUFAutor)
+    # con.evento() monta o envEvento internamente e espera o elemento <evento> assinado
+    try:
+        con = ComunicacaoSefaz(uf=uf_comprador, certificado=cert,
+                               certificado_senha=senha, homologacao=False)
+        resp = con.evento(modelo='nfe', evento=evt_assinado)
+
+        c_stat  = find_tag(resp.text, 'cStat')
+        x_motiv = find_tag(resp.text, 'xMotivo')
+        n_prot  = find_tag(resp.text, 'nProt')
+
+        # 128 = Lote de Evento Processado (sucesso)
+        # 135 = Evento Registrado, 136 = Vinculado
+        ok = c_stat in ('128', '135', '136')
+        simbolo = '✅' if ok else '❌'
+        print(f"  {simbolo} cStat   : {c_stat} – {x_motiv}")
+        if n_prot:
+            print(f"  Protocolo : {n_prot}")
+
+        out = os.path.join(BASE_DIR, f"evento_{tp_evento}_{chave}.xml")
+        with open(out, 'w', encoding='utf-8') as f:
+            f.write(resp.text)
+        print(f"  XML salvo : {os.path.basename(out)}")
+        return resp.text if ok else None
+    except Exception as e:
+        print(f"  ❌ Erro ao enviar evento: {e}")
+        return None
+
+
+# ─────────────────────────────────────────────
+#  3. DOWNLOAD DO XML COMPLETO (DFe)
+# ─────────────────────────────────────────────
+def _descompactar_docs(resp_text, chave):
+    """Descompacta todos os docZip da resposta."""
+    docs = re.findall(r'<docZip[^>]*schemaId="([^"]*)"[^>]*>(.*?)</docZip>', resp_text)
+    if not docs:
+        docs = [('nfe', d) for d in re.findall(r'<docZip[^>]*>(.*?)</docZip>', resp_text)]
+    resultado = []
+    for schema_id, doc_b64 in docs:
+        try:
+            xml_str = gzip.decompress(base64.b64decode(doc_b64)).decode('utf-8')
+            resultado.append((xml_str, schema_id))
+        except Exception as ex:
+            print(f"  ⚠️ Falha ao descompactar ({schema_id}): {ex}")
+    return resultado
+
+
+def _salvar_nfe(docs, chave):
+    nfe_xml = None
+    for xml_str, schema_id in docs:
+        if 'nfeProc' in xml_str or '<NFe' in xml_str or 'procNFe' in xml_str:
+            nfe_file = os.path.join(BASE_DIR, f"nfe_completo_{chave}.xml")
+            with open(nfe_file, 'w', encoding='utf-8') as f:
+                f.write(xml_str)
+            print(f"  ✅ XML completo salvo: {os.path.basename(nfe_file)}")
+            nfe_xml = xml_str
+        elif 'resNFe' in xml_str:
+            res_file = os.path.join(BASE_DIR, f"resumo_nfe_{chave}.xml")
+            with open(res_file, 'w', encoding='utf-8') as f:
+                f.write(xml_str)
+            print(f"  📋 Resumo salvo: {os.path.basename(res_file)}")
+            if not nfe_xml:
+                nfe_xml = xml_str
+        else:
+            out = os.path.join(BASE_DIR, f"doc_{schema_id[:20]}_{chave[:8]}.xml")
+            with open(out, 'w', encoding='utf-8') as f:
+                f.write(xml_str)
+            print(f"  📄 Doc salvo: {os.path.basename(out)}")
+    return nfe_xml
+
+
+def baixar_xml(chave, cert, senha, cnpj, uf_comprador='GO'):
+    separador("📥  DOWNLOAD DO XML COMPLETO (Distribuição DFe)")
+    try:
+        con = ComunicacaoSefaz(uf=uf_comprador, certificado=cert,
+                               certificado_senha=senha, homologacao=False)
+
+        # ── Tentativa 1: busca direta pela chave ─────────────────────────
+        print("  [1/2] Consultando por chave de acesso...")
+        resp  = con.consulta_distribuicao(cnpj=cnpj, chave=chave)
+        c_stat = find_tag(resp.text, 'cStat')
+        x_mot  = find_tag(resp.text, 'xMotivo')
+        print(f"        → {c_stat} – {x_mot}")
+        with open(os.path.join(BASE_DIR, f"distribuicao_{chave}.xml"), 'w', encoding='utf-8') as f:
+            f.write(resp.text)
+
+        if 'docZip' in resp.text:
+            return _salvar_nfe(_descompactar_docs(resp.text, chave), chave)
+
+        # ── Tentativa 2: varredura por NSU ────────────────────────────────
+        # A Sefaz exige varredura distNSU para indexar docs do destinatário
+        print("  [2/2] Varredura por NSU (distNSU a partir de 0)...")
+        nfe_xml    = None
+        ultimo_nsu = 0
+        paginas    = 0
+
+        while paginas < 30:
+            resp2  = con.consulta_distribuicao(cnpj=cnpj, nsu=ultimo_nsu,
+                                               consulta_nsu_especifico=False)
+            c2     = find_tag(resp2.text, 'cStat')
+            ult    = find_tag(resp2.text, 'ultNSU')
+            max_   = find_tag(resp2.text, 'maxNSU')
+            print(f"        → NSU {str(ultimo_nsu).zfill(6)} | cStat {c2} | ultNSU {ult} | maxNSU {max_}")
+
+            if 'docZip' in resp2.text:
+                docs = _descompactar_docs(resp2.text, chave)
+                for xml_str, schema_id in docs:
+                    if chave in xml_str:
+                        print("  ✅ Nota encontrada!")
+                        nfe_xml = _salvar_nfe([(xml_str, schema_id)], chave)
+
+            if nfe_xml:
+                break
+            if ult is None or ult == max_ or c2 in ('137', '000'):
+                break
+            novo = int(ult)
+            if novo <= ultimo_nsu:
+                break
+            ultimo_nsu = novo
+            paginas += 1
+
+        if nfe_xml:
+            return nfe_xml
+
+        print("  ⚠️  Documento não localizado.")
+        print("      Possíveis causas:")
+        print("      • O CNPJ do seu certificado não é o destinatário desta NF-e")
+        print("      • A nota ainda não foi distribuída pelo emitente")
+        return None
+
+    except Exception as e:
+        print(f"  ❌ Erro: {e}")
+        import traceback; traceback.print_exc()
+        return None
+
+
+
+# ─────────────────────────────────────────────
+#  4. EXTRAI DADOS DO XML COMPLETO E SALVA TXT
+# ─────────────────────────────────────────────
+def extrair_e_salvar_txt(xml_str, chave):
+    separador("📄  EXTRAÇÃO DE DADOS DO XML COMPLETO")
+
+    def tag(t):
+        return find_tag(xml_str, t) or 'N/A'
+
+    def fmt_cnpj(c):
+        return f"{c[0:2]}.{c[2:5]}.{c[5:8]}/{c[8:12]}-{c[12:14]}" if c and len(c)==14 else c
+
+    def fmt_valor(v):
+        try: return f"R$ {float(v):,.2f}".replace(',','X').replace('.',',').replace('X','.')
+        except: return v
+
+    dados = {
+        '=== EMITENTE ===': '',
+        'Razão Social'     : tag('xNome'),
+        'CNPJ Emitente'    : fmt_cnpj(tag('emit/CNPJ') if 'emit/CNPJ' in xml_str else tag('CNPJ')),
+        'Logradouro'       : tag('xLgr'),
+        'Número'           : tag('nro'),
+        'Bairro'           : tag('xBairro'),
+        'Município'        : tag('xMun'),
+        'UF'               : tag('UF'),
+        'IE'               : tag('IE'),
+        '=== DESTINATÁRIO ===': '',
+        'Razão Social Dest': tag('xNome'),   # será mais específico abaixo
+        'CNPJ Dest'        : fmt_cnpj(tag('CNPJ')),
+        '=== NOTA FISCAL ===': '',
+        'Número NF'        : tag('nNF'),
+        'Série'            : tag('serie'),
+        'Data Emissão'     : tag('dhEmi'),
+        'Natureza Operação': tag('natOp'),
+        'Chave Acesso'     : chave,
+        'Protocolo'        : tag('nProt'),
+        '=== TOTAIS ===' : '',
+        'Valor Produtos'   : fmt_valor(tag('vProd')),
+        'Valor Frete'      : fmt_valor(tag('vFrete')),
+        'Valor Desconto'   : fmt_valor(tag('vDesc')),
+        'Base Cálc. ICMS'  : fmt_valor(tag('vBC')),
+        'Valor ICMS'       : fmt_valor(tag('vICMS')),
+        'Valor IPI'        : fmt_valor(tag('vIPI')),
+        'Valor PIS'        : fmt_valor(tag('vPIS')),
+        'Valor COFINS'     : fmt_valor(tag('vCOFINS')),
+        'VALOR TOTAL NF'   : fmt_valor(tag('vNF')),
+        '=== TRANSPORTE ===' : '',
+        'Modalidade Frete' : tag('modFrete'),
+        'Transportadora'   : tag('xNome'),
+        'CNPJ Transp.'     : fmt_cnpj(tag('CNPJ')),
+    }
+
+    # Produtos – extrair lista
+    produtos_raw = re.findall(r'<det[^>]*>(.*?)</det>', xml_str, re.DOTALL)
+    produtos = []
+    for p in produtos_raw:
+        n_item = re.search(r'nItem="(\d+)"', p)
+        x_prod = find_tag(p, 'xProd')
+        c_prod = find_tag(p, 'cProd')
+        qcom   = find_tag(p, 'qCom')
+        ucom   = find_tag(p, 'uCom')
+        v_unit = find_tag(p, 'vUnCom')
+        v_tot  = find_tag(p, 'vProd')
+        if x_prod:
+            produtos.append({
+                'item'   : n_item.group(1) if n_item else '?',
+                'codigo' : c_prod or 'N/A',
+                'descr'  : x_prod,
+                'qtd'    : qcom or 'N/A',
+                'un'     : ucom or 'N/A',
+                'v_unit' : fmt_valor(v_unit) if v_unit else 'N/A',
+                'v_tot'  : fmt_valor(v_tot) if v_tot else 'N/A',
+            })
+
+    # Monta conteúdo do TXT
+    linhas = ['=' * 65,
+              '   DADOS COMPLETOS DA NF-e',
+              f'   Gerado em: {datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")}',
+              '=' * 65]
+
+    for k, v in dados.items():
+        if k.startswith('=== '):
+            linhas.append('')
+            linhas.append(k)
+            linhas.append('-' * 40)
+        elif v and v != 'N/A':
+            linhas.append(f"  {k:<30} {v}")
+
+    if produtos:
+        linhas.append('')
+        linhas.append('=== PRODUTOS / ITENS ===')
+        linhas.append('-' * 40)
+        for p in produtos:
+            linhas.append(f"  [{p['item']:>2}] {p['descr']}")
+            linhas.append(f"       Cód: {p['codigo']}  |  Qtd: {p['qtd']} {p['un']}  |  Unit: {p['v_unit']}  |  Total: {p['v_tot']}")
+
+    linhas.append('')
+    linhas.append('=' * 65)
+
+    conteudo = '\n'.join(linhas)
+    print(conteudo)
+
+    out = os.path.join(BASE_DIR, "dados_danfe_completo.txt")
+    with open(out, 'w', encoding='utf-8') as f:
+        f.write(conteudo)
+    print(f"\n  ✅ Arquivo salvo: {os.path.basename(out)}")
+
+
+# ─────────────────────────────────────────────
+#  MENU PRINCIPAL
+# ─────────────────────────────────────────────
+def main():
+    print('\n' + '═' * 60)
+    print('         BOT DE CONSULTA E DOWNLOAD DE DANFE')
+    print('         Empresa: Goiânia/GO')
+    print('═' * 60)
+
+    # Carrega dados
+    dados     = parse_dados_txt()
+    cnpj      = limpar(dados['CNPJ'])
+    senha     = dados['SENHA CERTIFICADO']
+    chave     = limpar(dados['CHAVE DE ACESSO DANFE'])
+
+    if not os.path.exists(CERT_FILE):
+        print("❌ Certificado não encontrado!"); return
+    if len(chave) != 44:
+        print("❌ Chave de acesso inválida!"); return
+
+    # Determina UF do emitente pela chave
+    uf_emit = MAPA_UF.get(chave[:2], 'SP')
+
+    print(f"\n  CNPJ Comprador : {cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:14]}")
+    print(f"  UF Emitente    : {uf_emit}")
+    print(f"  Chave          : {chave}")
+
+    while True:
+        print('\n' + '─' * 60)
+        print('  O que deseja fazer?')
+        print('  [1] Consultar status da NF-e na Sefaz')
+        print('  [2] Ciência da Operação (210210) → libera XML')
+        print('  [3] Confirmação da Operação (210200) → confirma recebimento')
+        print('  [4] Operação não Realizada (210220)')
+        print('  [5] Desconhecimento da Operação (210240)')
+        print('  [6] Baixar XML completo e salvar TXT')
+        print('  [7] Ciência + Baixar XML (fluxo completo)')
+        print('  [0] Sair')
+        print('─' * 60)
+
+        op = input('  Digite a opção: ').strip()
+
+        if op == '0':
+            print('\n  Até logo! 👋')
+            break
+
+        elif op == '1':
+            consultar_status(chave, CERT_FILE, senha, uf_emit)
+
+        elif op in ('2', '3', '4', '5'):
+            tp, desc = EVENTOS[op]
+            manifestar(chave, CERT_FILE, senha, cnpj, tp, desc, uf_comprador='GO')
+
+        elif op == '6':
+            xml = baixar_xml(chave, CERT_FILE, senha, cnpj, uf_comprador='GO')
+            if xml:
+                extrair_e_salvar_txt(xml, chave)
+            else:
+                print("\n  ⚠️  XML não disponível. Faça a Ciência da Operação (opção 2) primeiro.")
+
+        elif op == '7':
+            print('\n  [Passo 1/3] Ciência da Operação...')
+            ok = manifestar(chave, CERT_FILE, senha, cnpj, '210210', 'Ciencia da Operacao', uf_comprador='GO')
+            print('\n  [Passo 2/3] Aguardando processamento Sefaz (8s)...')
+            import time; time.sleep(8)
+            print('\n  [Passo 3/3] Baixando XML completo...')
+            xml = baixar_xml(chave, CERT_FILE, senha, cnpj, uf_comprador='GO')
+            if xml:
+                extrair_e_salvar_txt(xml, chave)
+            else:
+                print("\n  ⚠️  O servidor pode levar alguns segundos para liberar o documento.")
+                print("        Aguarde e use a opção [6] para baixar novamente.")
+
+        else:
+            print('  Opção inválida.')
+
+
+if __name__ == '__main__':
+    main()
