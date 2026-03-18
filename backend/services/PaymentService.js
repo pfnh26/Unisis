@@ -37,6 +37,10 @@ class PaymentService {
     async getSales() {
         return await this.saleRepository.findAllWithDetails();
     }
+
+    async deletePayment(id) {
+        return await this.paymentRepository.delete(id);
+    }
 }
 
 module.exports = PaymentService;

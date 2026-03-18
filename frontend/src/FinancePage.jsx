@@ -107,17 +107,27 @@ const FinancePage = () => {
 
             if (isNaN(dueDate.getTime())) continue;
 
+            let paymentId = null;
             const isPaid = currentPayments.some(p => {
                 const refDate = p.due_date_ref ? new Date(p.due_date_ref) : null;
                 if (refDate && !isNaN(refDate.getTime())) {
-                    return isSameMonth(refDate, dueDate) && isSameYear(refDate, dueDate);
+                    if (isSameMonth(refDate, dueDate) && isSameYear(refDate, dueDate)) {
+                        paymentId = p.id;
+                        return true;
+                    }
                 }
 
-                if (p.description === `Parcela ${i + 1}`) return true;
+                if (p.description === `Parcela ${i + 1}`) {
+                    paymentId = p.id;
+                    return true;
+                }
 
                 const pDate = p.payment_date ? new Date(p.payment_date) : null;
                 if (pDate && !isNaN(pDate.getTime())) {
-                    return isSameMonth(pDate, dueDate) && isSameYear(pDate, dueDate);
+                    if (isSameMonth(pDate, dueDate) && isSameYear(pDate, dueDate)) {
+                        paymentId = p.id;
+                        return true;
+                    }
                 }
                 return false;
             });
@@ -126,6 +136,7 @@ const FinancePage = () => {
                 dueDate: format(dueDate, 'yyyy-MM-dd'),
                 amount: contract.total_value,
                 isPaid,
+                paymentId,
                 label: `Parcela ${i + 1}`
             });
         }
@@ -158,6 +169,29 @@ const FinancePage = () => {
         } catch (err) {
             console.error('Erro ao registrar pagamento:', err);
             alert(`Erro ao registrar pagamento: ${err.response?.data?.error || err.message}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleUndoPayment = async (invoice, index) => {
+        if (!invoice.paymentId) return;
+        if (!confirm('Deseja realmente cancelar o recebimento desta fatura?')) return;
+
+        if (isSaving) return;
+        setIsSaving(true);
+        try {
+            await api.delete(`/payments/${invoice.paymentId}`);
+            const { data } = await api.get(`/contracts/${selectedContract.id}/payments`);
+            setPayments(data);
+
+            const updated = [...editableInvoices];
+            updated[index].isPaid = false;
+            updated[index].paymentId = null;
+            setEditableInvoices(updated);
+        } catch (err) {
+            console.error('Erro ao cancelar recebimento:', err);
+            alert(`Erro ao cancelar recebimento: ${err.response?.data?.error || err.message}`);
         } finally {
             setIsSaving(false);
         }
@@ -458,16 +492,31 @@ const FinancePage = () => {
 
                                 <div style={{ marginTop: '0.5rem' }}>
                                     {inv.isPaid ? (
-                                        <span style={{
-                                            display: 'block',
-                                            textAlign: 'center',
-                                            padding: '0.5rem',
-                                            borderRadius: '0.5rem',
-                                            fontSize: '0.75rem',
-                                            fontWeight: 800,
-                                            backgroundColor: '#dcfce7',
-                                            color: '#166534'
-                                        }}>PAGO</span>
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <span style={{
+                                                flex: 1,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                padding: '0.5rem',
+                                                borderRadius: '0.5rem',
+                                                fontSize: '0.75rem',
+                                                fontWeight: 800,
+                                                backgroundColor: '#dcfce7',
+                                                color: '#166534'
+                                            }}>PAGO</span>
+                                            {inv.paymentId && (
+                                                <button
+                                                    disabled={isSaving}
+                                                    onClick={() => handleUndoPayment(inv, idx)}
+                                                    className="btn-primary"
+                                                    style={{ padding: '0.5rem 0.8rem', backgroundColor: '#ef4444', fontSize: '0.75rem' }}
+                                                    title="Desfazer Recebimento"
+                                                >
+                                                    Desfazer
+                                                </button>
+                                            )}
+                                        </div>
                                     ) : (
                                         <button
                                             disabled={isSaving}

@@ -219,6 +219,7 @@ app.post('/api/commissions/extra', authenticateToken, (req, res) => controllers.
 
 // Payments
 app.post('/api/payments', authenticateToken, (req, res) => controllers.payment.createPayment(req, res));
+app.delete('/api/payments/:id', authenticateToken, (req, res) => controllers.payment.deletePayment(req, res));
 
 // Service Orders
 app.get('/api/service-orders', authenticateToken, (req, res) => controllers.serviceOrder.getServiceOrders(req, res));

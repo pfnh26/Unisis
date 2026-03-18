@@ -214,10 +214,16 @@ class NotificationService {
 
         // Configuration for generic SMTP or Gmail
         const config = {
-            host: smtp_host || 'smtp.gmail.com',
-            port: smtp_port || 587,
-            secure: !!smtp_secure, // true for 465, false for other ports
-            auth: { user: smtp_email, pass: smtp_password }
+            host: smtp_host ? smtp_host.trim() : 'smtp.gmail.com',
+            port: parseInt(smtp_port) || 587,
+            secure: smtp_port == 465 || smtp_secure === true || smtp_secure === 'true', // true for 465, false for other ports
+            auth: { 
+                user: smtp_email ? smtp_email.trim() : '', 
+                pass: smtp_password ? smtp_password.trim() : '' 
+            },
+            tls: {
+                rejectUnauthorized: false
+            }
         };
 
         // If it's Gmail and no host is provided, use service: 'gmail' shortcut for convenience

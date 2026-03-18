@@ -29,7 +29,18 @@ class AdminController {
         if (!isAdmin && !hasAdminPerm) return res.status(403).json({ error: 'Acesso negado' });
         try {
             const users = await this.adminService.getUsers();
-            res.json(users);
+            
+            // JWT might not have username, so find the requester in the users list
+            const requesterId = req.user.id || req.user.userId;
+            const requester = users.find(u => u.id == requesterId);
+            const isMasterAdmin = requester && requester.username === 'admin';
+
+            // Oculta a conta 'admin' principal para os outros administradores
+            const filteredUsers = isMasterAdmin
+                ? users
+                : users.filter(u => u.username !== 'admin');
+                
+            res.json(filteredUsers);
         } catch (err) {
             res.status(500).json({ error: err.message });
         }
@@ -42,6 +53,18 @@ class AdminController {
         const { id } = req.params;
         const { permissions } = req.body;
         try {
+            const requesterId = req.user.id || req.user.userId;
+            const users = await this.adminService.getUsers();
+            const requester = users.find(u => u.id == requesterId);
+            const isMasterAdmin = requester && requester.username === 'admin';
+
+            if (!isMasterAdmin) {
+                const targetUser = users.find(u => u.id == id);
+                if (targetUser && targetUser.username === 'admin') {
+                    return res.status(403).json({ error: 'Você não tem permissão para modificar o Administrador principal.' });
+                }
+            }
+
             await this.adminService.updateUserPermissions(id, permissions);
             res.json({ success: true });
         } catch (err) {
@@ -67,6 +90,18 @@ class AdminController {
         if (!isAdmin && !hasAdminPerm) return res.status(403).json({ error: 'Acesso negado' });
         const { id } = req.params;
         try {
+            const requesterId = req.user.id || req.user.userId;
+            const users = await this.adminService.getUsers();
+            const requester = users.find(u => u.id == requesterId);
+            const isMasterAdmin = requester && requester.username === 'admin';
+
+            if (!isMasterAdmin) {
+                const targetUser = users.find(u => u.id == id);
+                if (targetUser && targetUser.username === 'admin') {
+                    return res.status(403).json({ error: 'Você não tem permissão para modificar o Administrador principal.' });
+                }
+            }
+
             const user = await this.adminService.updateUser(id, req.body);
             res.json(user);
         } catch (err) {
@@ -80,6 +115,18 @@ class AdminController {
         if (!isAdmin && !hasAdminPerm) return res.status(403).json({ error: 'Acesso negado' });
         const { id } = req.params;
         try {
+            const requesterId = req.user.id || req.user.userId;
+            const users = await this.adminService.getUsers();
+            const requester = users.find(u => u.id == requesterId);
+            const isMasterAdmin = requester && requester.username === 'admin';
+
+            if (!isMasterAdmin) {
+                const targetUser = users.find(u => u.id == id);
+                if (targetUser && targetUser.username === 'admin') {
+                    return res.status(403).json({ error: 'Você não tem permissão para excluir o Administrador principal.' });
+                }
+            }
+
             await this.adminService.deleteUser(id);
             res.sendStatus(204);
         } catch (err) {

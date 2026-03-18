@@ -44,6 +44,17 @@ class PaymentController {
             res.status(400).json({ error: err.message });
         }
     }
+
+    async deletePayment(req, res) {
+        try {
+            await this.paymentService.deletePayment(req.params.id);
+            this.logActivity(req.user.id || req.user.userId, 'Excluir Pagamento', `Pagamento ID: ${req.params.id}`);
+            res.sendStatus(204);
+        } catch (err) {
+            console.error('Error deleting payment:', err);
+            res.status(500).json({ error: err.message });
+        }
+    }
 }
 
 module.exports = PaymentController;
