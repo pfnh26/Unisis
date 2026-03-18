@@ -9,3 +9,5 @@ sudo find / -type f -name "clear_db.py" 2>/dev/null
 scp -r /d/UniSis/* unisis:/var/www/unisis/
 ssh unisis 
 sshi.unisis.online
+
+azvc letv qwwz iatv

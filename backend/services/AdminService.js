@@ -47,14 +47,26 @@ class AdminService {
         return stats;
     }
 
-    async getSellersStats() {
+    async getSellersStats(month, year) {
+        let finishedQuery = "so.execution_date >= CURRENT_DATE - INTERVAL '7 days'";
+        let openQuery = "1=1";
+        let delayedQuery = "so.execution_date < CURRENT_DATE";
+        let params = [];
+
+        if (month && year) {
+            finishedQuery = "EXTRACT(MONTH FROM so.execution_date) = $1 AND EXTRACT(YEAR FROM so.execution_date) = $2";
+            openQuery = "EXTRACT(MONTH FROM so.execution_date) = $1 AND EXTRACT(YEAR FROM so.execution_date) = $2";
+            delayedQuery = "so.execution_date < CURRENT_DATE AND EXTRACT(MONTH FROM so.execution_date) = $1 AND EXTRACT(YEAR FROM so.execution_date) = $2";
+            params = [month, year];
+        }
+
         const result = await this.pool.query(`
             SELECT s.id, s.name, s.user_id,
-            (SELECT COUNT(*) FROM service_orders so WHERE so.seller_id = s.user_id AND so.status = 'Feito' AND so.execution_date >= CURRENT_DATE - INTERVAL '7 days') as finished_week,
-            (SELECT COUNT(*) FROM service_orders so WHERE so.seller_id = s.user_id AND so.status = 'Pendente') as open_orders,
-            (SELECT COUNT(*) FROM service_orders so WHERE so.seller_id = s.user_id AND so.status = 'Pendente' AND so.execution_date < CURRENT_DATE) as delayed_orders
+            (SELECT COUNT(*) FROM service_orders so WHERE so.seller_id = s.user_id AND so.status = 'Feito' AND ${finishedQuery}) as finished_week,
+            (SELECT COUNT(*) FROM service_orders so WHERE so.seller_id = s.user_id AND so.status = 'Pendente' AND ${openQuery}) as open_orders,
+            (SELECT COUNT(*) FROM service_orders so WHERE so.seller_id = s.user_id AND so.status = 'Pendente' AND ${delayedQuery}) as delayed_orders
             FROM sellers s
-        `);
+        `, params);
         return result.rows;
     }
 

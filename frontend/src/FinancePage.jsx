@@ -25,6 +25,7 @@ const FinancePage = () => {
     const [isExtraSalesModalOpen, setIsExtraSalesModalOpen] = useState(false);
     const [extraSales, setExtraSales] = useState([]);
     const [editableInvoices, setEditableInvoices] = useState([]);
+    const [isSaving, setIsSaving] = useState(false);
 
     const fetchData = async () => {
         try {
@@ -138,6 +139,8 @@ const FinancePage = () => {
     };
 
     const handlePayInvoice = async (invoice, index) => {
+        if (isSaving) return;
+        setIsSaving(true);
         try {
             await api.post('/payments', {
                 amount: invoice.amount,
@@ -155,6 +158,8 @@ const FinancePage = () => {
         } catch (err) {
             console.error('Erro ao registrar pagamento:', err);
             alert(`Erro ao registrar pagamento: ${err.response?.data?.error || err.message}`);
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -220,6 +225,7 @@ const FinancePage = () => {
         
         if (!confirm(`Deseja enviar as ${openInvoices.length} faturas em aberto para ${selectedClient.email}?`)) return;
 
+        setIsSaving(true);
         try {
             const partner = partners.find(p => p.id === selectedContract.partner_id) || {};
             const attachments = [];
@@ -254,7 +260,9 @@ const FinancePage = () => {
             });
             alert("E-mails enviados com sucesso!");
         } catch (err) {
-            alert("Erro ao enviar e-mails: " + err.message);
+            alert("Erro ao enviar e-mails: " + (err.response?.data?.error || err.message));
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -270,11 +278,17 @@ const FinancePage = () => {
     };
 
     const markSaleAsPaid = async (sale) => {
+        if (isSaving) return;
+        setIsSaving(true);
         try {
             await api.patch(`/extra-sales/${sale.id}/status`, { status: 'Pago' });
             const { data } = await api.get('/extra-sales');
             setExtraSales(data.filter(s => s.client_id === selectedClient.id));
-        } catch (err) { alert("Erro ao atualizar status"); }
+        } catch (err) { 
+            alert("Erro ao atualizar status"); 
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -456,11 +470,12 @@ const FinancePage = () => {
                                         }}>PAGO</span>
                                     ) : (
                                         <button
+                                            disabled={isSaving}
                                             onClick={() => handlePayInvoice(inv, idx)}
                                             className="btn-primary"
                                             style={{ width: '100%', padding: '0.6rem', backgroundColor: '#10b981', fontSize: '0.8rem' }}
                                         >
-                                            Confirmar Recebimento
+                                            {isSaving ? 'Processando...' : 'Confirmar Recebimento'}
                                         </button>
                                     )}
                                 </div>
@@ -534,11 +549,12 @@ const FinancePage = () => {
                                             }}>PAGO</span>
                                         ) : (
                                             <button
+                                                disabled={isSaving}
                                                 onClick={() => markSaleAsPaid(s)}
                                                 className="btn-primary"
                                                 style={{ width: '100%', padding: '0.6rem', backgroundColor: '#10b981', fontSize: '0.8rem' }}
                                             >
-                                                Confirmar Recebimento
+                                                {isSaving ? 'Processando...' : 'Confirmar Recebimento'}
                                             </button>
                                         )}
                                     </div>

@@ -15,18 +15,13 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js')
       .then(registration => {
         console.log('SW registered: ', registration);
-        
-        // Se já houver um SW aguardando, ativa-o
-        if (registration.waiting) {
-          registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-        }
 
-        // Mecanismo para forçar atualização imediata para novos SWs
+        // Verificação periódica para forçar atualização se houver SW aguardando
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // Novo SW está aguardando, envia mensagem para ativar
+              // Nova versão instalada, avisar ao usuário ou forçar recarga automática
               newWorker.postMessage({ type: 'SKIP_WAITING' });
             }
           });
@@ -37,12 +32,20 @@ if ('serviceWorker' in navigator) {
       });
   });
 
-  // Recarregar a página apenas uma vez quando o controle mudar
+  // Mecanismo para forçar a atualização caso já esteja em standby
+  navigator.serviceWorker.getRegistration().then(reg => {
+    if (reg && reg.waiting) {
+      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      window.location.reload(true); // força usar a nova versão
+    }
+  });
+
+  // Garantir que ao ativar o novo SW, a página recarregue para usar o novo cache
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!refreshing) {
-      refreshing = true;
       window.location.reload();
+      refreshing = true;
     }
   });
 }

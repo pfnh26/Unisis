@@ -36,15 +36,30 @@ class ContractService {
     async updateContractStatus(id, status, execution_date) {
         const contract = await this.contractRepository.updateStatus(id, status);
 
-        // If contract is activated, generate Service Order
+        // If contract is activated, ensure a Service Order exists
         if (status === 'Ativo' && contract.seller_id) {
             const seller = await this.sellerRepository.findById(contract.seller_id);
             if (seller) {
-                await this.serviceOrderRepository.create({
-                    contract_id: id,
-                    seller_id: seller.user_id,
-                    execution_date: execution_date || new Date().toISOString()
+                // Check if there is already a PENDING Service Order for this contract
+                const existingOS = await this.serviceOrderRepository.findOne({
+                    where: 'contract_id = $1 AND status = $2',
+                    params: [id, 'Pendente']
                 });
+
+                if (existingOS) {
+                    // Just update the existing one
+                    await this.serviceOrderRepository.update(existingOS.id, {
+                        seller_id: seller.user_id,
+                        execution_date: execution_date || new Date().toISOString()
+                    });
+                } else {
+                    // Create new OS
+                    await this.serviceOrderRepository.create({
+                        contract_id: id,
+                        seller_id: seller.user_id,
+                        execution_date: execution_date || new Date().toISOString()
+                    });
+                }
             }
         }
         return contract;
@@ -62,17 +77,29 @@ class ContractService {
 
         const result = await this.contractRepository.update(id, updates);
 
-        // Logic check: if status changed to 'Ativo', ensure OS is created
+        // Logic check: if status changed to 'Ativo', ensure OS is created or updated
         if (updates.status === 'Ativo') {
             const contract = await this.contractRepository.findById(id);
             if (contract && contract.seller_id) {
                 const seller = await this.sellerRepository.findById(contract.seller_id);
                 if (seller) {
-                    await this.serviceOrderRepository.create({
-                        contract_id: id,
-                        seller_id: seller.user_id,
-                        execution_date: updates.execution_date || new Date().toISOString()
+                    const existingOS = await this.serviceOrderRepository.findOne({
+                        where: 'contract_id = $1 AND status = $2',
+                        params: [id, 'Pendente']
                     });
+
+                    if (existingOS) {
+                        await this.serviceOrderRepository.update(existingOS.id, {
+                            seller_id: seller.user_id,
+                            execution_date: updates.execution_date || new Date().toISOString()
+                        });
+                    } else {
+                        await this.serviceOrderRepository.create({
+                            contract_id: id,
+                            seller_id: seller.user_id,
+                            execution_date: updates.execution_date || new Date().toISOString()
+                        });
+                    }
                 }
             }
         }

@@ -5,6 +5,17 @@ import Modal from './Modal';
 import ModalConfirm from './ModalConfirm';
 import { format, isAfter, startOfDay } from 'date-fns';
 
+const safeDate = (dateStr) => {
+    if (!dateStr) return null;
+    if (typeof dateStr === 'object') return dateStr;
+    // Se a string for YYYY-MM-DD, divide e cria em hora local para evitar o shift de timezone
+    const parts = dateStr.split('T')[0].split('-');
+    if (parts.length === 3) {
+        return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    return new Date(dateStr);
+};
+
 const ServiceOrdersPage = () => {
     const [orders, setOrders] = useState([]);
     const [selectedOrder, setSelectedOrder] = useState(null);
@@ -45,7 +56,7 @@ const ServiceOrdersPage = () => {
     };
 
     const isDelayed = (date, status) => {
-        return status === 'Pendente' && isAfter(startOfDay(new Date()), startOfDay(new Date(date)));
+        return status === 'Pendente' && isAfter(startOfDay(new Date()), startOfDay(safeDate(date)));
     };
 
     return (
@@ -80,7 +91,7 @@ const ServiceOrdersPage = () => {
                         ) : orders.map(order => (
                             <tr key={order.id}>
                                 <td data-label="Data">
-                                    {format(new Date(order.execution_date), 'dd/MM/yyyy')}
+                                    {format(safeDate(order.execution_date), 'dd/MM/yyyy')}
                                     {isDelayed(order.execution_date, order.status) && (
                                         <span style={{ marginLeft: '0.5rem', color: '#ef4444', fontSize: '0.7rem', fontWeight: 700 }}>ATRASADO</span>
                                     )}
@@ -144,7 +155,7 @@ const ServiceOrdersPage = () => {
 
                         <div>
                             <p className="label">Data Programada</p>
-                            <p>{format(new Date(selectedOrder.execution_date), 'dd/MM/yyyy')}</p>
+                            <p>{format(safeDate(selectedOrder.execution_date), 'dd/MM/yyyy')}</p>
                         </div>
 
                         <div>

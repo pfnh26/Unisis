@@ -10,6 +10,23 @@ class PaymentService {
     }
 
     async createPayment(data) {
+        // Deduplication
+        if (data.contract_id && data.due_date_ref) {
+            const existing = await this.paymentRepository.findOne({
+                where: 'contract_id = $1 AND due_date_ref = $2',
+                params: [data.contract_id, data.due_date_ref]
+            });
+            if (existing) return existing;
+        }
+
+        if (data.sale_id) {
+            const existing = await this.paymentRepository.findOne({
+                where: 'sale_id = $1',
+                params: [data.sale_id]
+            });
+            if (existing) return existing;
+        }
+
         return await this.paymentRepository.create(data);
     }
 

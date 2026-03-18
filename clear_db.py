@@ -23,6 +23,7 @@ def clear_database():
 
         # Lista de tabelas para limpar (em ordem que respeite FKs ou usando CASCADE)
         tables = [
+            'email_logs',
             'activity_log',
             'inventory_log',
             'payments',
@@ -32,6 +33,7 @@ def clear_database():
             'extra_commissions',
             'reports',
             'bills_payable',
+            'invoices',
             'sellers',
             'partners',
             'products',

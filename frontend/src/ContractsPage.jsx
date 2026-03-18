@@ -8,6 +8,16 @@ import { generateContractPDF, getContractPDFBlobURL } from './ContractGenerator'
 import { format } from 'date-fns';
 import ClientQuickAddModal from './ClientQuickAddModal';
 
+const safeDate = (dateStr) => {
+    if (!dateStr) return null;
+    if (typeof dateStr === 'object') return dateStr;
+    const parts = dateStr.split('T')[0].split('-');
+    if (parts.length === 3) {
+        return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    return new Date(dateStr);
+};
+
 // Helpers de moeda BR
 const parseCurrencyInput = (raw) => {
     if (raw === '' || raw === null || raw === undefined) return '';
@@ -37,6 +47,7 @@ const ContractsPage = () => {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [contractToDelete, setContractToDelete] = useState(null);
     const [editingContractId, setEditingContractId] = useState(null);
+    const [isSavingStatus, setIsSavingStatus] = useState(false);
 
     const [selectedContract, setSelectedContract] = useState(null);
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -158,7 +169,7 @@ const ContractsPage = () => {
             pump_value: formatCurrency(contract.pump_value || 0),
             pump_delivery_address: contract.pump_delivery_address || '',
             duration_months: contract.duration_months,
-            start_date: format(new Date(contract.start_date), 'yyyy-MM-dd'),
+            start_date: format(safeDate(contract.start_date), 'yyyy-MM-dd'),
             payment_day: contract.payment_day,
             description: contract.description || '',
             no_amortization: contract.no_amortization
@@ -169,12 +180,18 @@ const ContractsPage = () => {
     };
 
     const handleStatusUpdate = async (id, status, execution_date) => {
+        if (isSavingStatus) return;
+        setIsSavingStatus(true);
         try {
             await api.patch(`/contracts/${id}/status`, { status, execution_date });
             showToast("Status atualizado com sucesso!", "success");
             setIsStatusModalOpen(false);
             fetchData();
-        } catch (err) { showToast("Erro ao atualizar status", "error"); }
+        } catch (err) { 
+            showToast("Erro ao atualizar status", "error"); 
+        } finally {
+            setIsSavingStatus(false);
+        }
     };
 
     const handleFileUpload = async (e, contractId) => {
@@ -501,8 +518,12 @@ const ContractsPage = () => {
                         <input type="date" className="input-field" value={osExecutionDate} onChange={e => setOsExecutionDate(e.target.value)} />
                     </div>
                     <div style={{ display: 'flex', gap: '1rem' }}>
-                        <button onClick={() => handleStatusUpdate(selectedContract.id, 'Ativo', osExecutionDate)} className="btn-primary" style={{ backgroundColor: '#10b981', flex: 1 }}>Ativar e Gerar OS</button>
-                        <button onClick={() => handleStatusUpdate(selectedContract.id, 'Cancelado')} className="btn-primary" style={{ backgroundColor: '#ef4444', flex: 1 }}>Cancelar Contrato</button>
+                        <button disabled={isSavingStatus} onClick={() => handleStatusUpdate(selectedContract.id, 'Ativo', osExecutionDate)} className="btn-primary" style={{ backgroundColor: '#10b981', flex: 1 }}>
+                            {isSavingStatus ? 'Processando...' : 'Ativar e Gerar OS'}
+                        </button>
+                        <button disabled={isSavingStatus} onClick={() => handleStatusUpdate(selectedContract.id, 'Cancelado')} className="btn-primary" style={{ backgroundColor: '#ef4444', flex: 1 }}>
+                            {isSavingStatus ? 'Processando...' : 'Cancelar Contrato'}
+                        </button>
                     </div>
                 </div>
             </Modal>

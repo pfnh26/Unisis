@@ -1,4 +1,4 @@
-// Service Worker para PWA - Cache e Offline
+// Service Worker para PWA - Cache e Offline - Versão 2 Force Update
 const CACHE_NAME = 'pwa-cache-v2';
 const RUNTIME_CACHE = 'runtime-cache-v2';
 
@@ -39,7 +39,7 @@ self.addEventListener('activate', (event) => {
         caches.keys().then(cacheNames => {
             return Promise.all(
                 cacheNames.map(cacheName => {
-                    // Remove qualquer cache que não seja o atual (CACHE_NAME ou RUNTIME_CACHE)
+                    // Limpeza de caches antigos - Garante que arquivos desatualizados não fiquem no dispositivo
                     if (cacheName !== CACHE_NAME && cacheName !== RUNTIME_CACHE) {
                         console.log('[SW] Deleting old cache:', cacheName);
                         return caches.delete(cacheName);

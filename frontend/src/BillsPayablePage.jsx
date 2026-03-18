@@ -3,7 +3,17 @@ import api from './api';
 import { Search, Plus, Trash2, Edit2, CheckCircle, Calendar, Filter, X, Barcode, Copy } from 'lucide-react';
 import Modal from './Modal';
 import ModalConfirm from './ModalConfirm';
-import { format, isPast, isToday, parseISO } from 'date-fns';
+import { format, isPast, isToday } from 'date-fns';
+
+const safeDate = (dateStr) => {
+    if (!dateStr) return null;
+    if (typeof dateStr === 'object') return dateStr;
+    const parts = dateStr.split('T')[0].split('-');
+    if (parts.length === 3) {
+        return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    return new Date(dateStr);
+};
 
 // Converte string BR (1.234,56 ou 1234,56 ou 1234.56) para número float
 const parseCurrencyInput = (raw) => {
@@ -137,7 +147,7 @@ const BillsPayablePage = () => {
 
     const getStatusLabel = (bill) => {
         if (bill.status === 'Pago') return { label: 'Pago', color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' };
-        const dueDate = parseISO(bill.due_date);
+        const dueDate = safeDate(bill.due_date);
         if (isPast(dueDate) && !isToday(dueDate)) return { label: 'Atrasado', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' };
         return { label: 'Em Dia', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' };
     };
@@ -253,7 +263,7 @@ const BillsPayablePage = () => {
                                     </td>
                                     <td data-label="Categoria">{bill.category}</td>
                                     <td data-label="Valor">R$ {formatCurrency(bill.value)}</td>
-                                    <td data-label="Vencimento">{format(parseISO(bill.due_date), 'dd/MM/yyyy')}</td>
+                                    <td data-label="Vencimento">{format(safeDate(bill.due_date), 'dd/MM/yyyy')}</td>
                                     <td data-label="Recorrência">{bill.recurrence}</td>
                                     <td data-label="Status">
                                         <span style={{
@@ -346,7 +356,7 @@ const BillsPayablePage = () => {
                         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
                             <div style={{ padding: '0.75rem 1.5rem', background: 'var(--bg-secondary)', borderRadius: '8px', textAlign: 'center', flex: 1 }}>
                                 <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>Vencimento</p>
-                                <p style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>{format(parseISO(showingBoleto.due_date), 'dd/MM/yyyy')}</p>
+                                <p style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>{format(safeDate(showingBoleto.due_date), 'dd/MM/yyyy')}</p>
                             </div>
                             <div style={{ padding: '0.75rem 1.5rem', background: 'var(--bg-secondary)', borderRadius: '8px', textAlign: 'center', flex: 1 }}>
                                 <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>Valor</p>

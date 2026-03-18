@@ -104,12 +104,20 @@ class SaleService {
             const existingPayment = await this.pool.query('SELECT id FROM payments WHERE sale_id = $1', [id]);
 
             if (existingPayment.rows.length === 0) {
-                await this.paymentRepository.create({
-                    sale_id: id,
-                    amount: sale.price,
-                    payment_date: new Date(),
-                    description: `Pagamento Venda Avulsa: ${sale.product_description || 'Serviço'}`
+                // Double check using repository findOne for consistency
+                const exists = await this.paymentRepository.findOne({
+                    where: 'sale_id = $1',
+                    params: [id]
                 });
+                
+                if (!exists) {
+                    await this.paymentRepository.create({
+                        sale_id: id,
+                        amount: sale.price,
+                        payment_date: new Date(),
+                        description: `Pagamento Venda Avulsa: ${sale.product_description || 'Serviço'}`
+                    });
+                }
             }
         }
 

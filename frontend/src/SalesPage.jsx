@@ -8,6 +8,16 @@ import { format } from 'date-fns';
 import { getReceiptPDFBlobURL } from './ReceiptGenerator';
 import ClientQuickAddModal from './ClientQuickAddModal';
 
+const safeDate = (dateStr) => {
+    if (!dateStr) return null;
+    if (typeof dateStr === 'object') return dateStr;
+    const parts = dateStr.split('T')[0].split('-');
+    if (parts.length === 3) {
+        return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    return new Date(dateStr);
+};
+
 // Helpers de moeda BR
 const parseCurrencyInput = (raw) => {
     if (raw === '' || raw === null || raw === undefined) return 0;
@@ -41,6 +51,7 @@ const SalesPage = () => {
     const [editingSaleId, setEditingSaleId] = useState(null);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [saleToDelete, setSaleToDelete] = useState(null);
+    const [isSaving, setIsSaving] = useState(false);
 
     const [newSale, setNewSale] = useState({
         client_id: '', seller_id: '', partner_id: '',
@@ -124,6 +135,8 @@ const SalesPage = () => {
     };
 
     const handleCreate = async () => {
+        if (isSaving) return;
+        setIsSaving(true);
         try {
             const dataToSend = { ...newSale };
             if (!dataToSend.client_id) dataToSend.client_id = null;
@@ -149,6 +162,8 @@ const SalesPage = () => {
         } catch (err) {
             console.error(err);
             showToast("Erro ao processar venda: " + (err.response?.data?.error || err.message), "error");
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -172,7 +187,7 @@ const SalesPage = () => {
             client_id: sale.client_id,
             seller_id: sale.seller_id,
             partner_id: sale.partner_id,
-            execution_date: format(new Date(sale.execution_date), 'yyyy-MM-dd'),
+            execution_date: format(safeDate(sale.execution_date), 'yyyy-MM-dd'),
             description: sale.description || '',
             items: saleItems,
             cost: totalCost,
@@ -253,7 +268,7 @@ const SalesPage = () => {
                                 s.product_description?.toLowerCase().includes(term);
                         }).map(sale => (
                             <tr key={sale.id}>
-                                <td data-label="Data">{format(new Date(sale.execution_date), 'dd/MM/yyyy')}</td>
+                                <td data-label="Data">{format(safeDate(sale.execution_date), 'dd/MM/yyyy')}</td>
                                 <td data-label="Cliente">
                                     <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)', marginRight: '0.5rem' }}>#{sale.client_id}</span>
                                     {sale.client_name}
@@ -453,9 +468,9 @@ const SalesPage = () => {
                                     <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>CLIENTE</p>
                                     <p style={{ fontWeight: 700 }}>{clients.find(c => c.id == previewSale.client_id)?.name}</p>
                                 </div>
-                                <div>
+                                 <div>
                                     <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>DATA</p>
-                                    <p style={{ fontWeight: 700 }}>{previewSale.execution_date ? format(new Date(previewSale.execution_date + 'T12:00:00'), 'dd/MM/yyyy') : '--'}</p>
+                                    <p style={{ fontWeight: 700 }}>{previewSale.execution_date ? format(safeDate(previewSale.execution_date), 'dd/MM/yyyy') : '--'}</p>
                                 </div>
                             </div>
                             <div style={{ marginTop: '1.5rem', borderTop: '1px dashed var(--border)', paddingTop: '1rem' }}>
@@ -473,8 +488,10 @@ const SalesPage = () => {
                             </div>
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button onClick={() => setPreviewSale(null)} className="btn-primary" style={{ flex: 1, backgroundColor: '#6b7280' }}>Voltar e Corrigir</button>
-                            <button onClick={handleCreate} className="btn-primary" style={{ flex: 1, backgroundColor: '#10b981' }}>{editingSaleId ? "Salvar Alterações" : "Confirmar e Gerar OS"}</button>
+                            <button disabled={isSaving} onClick={() => setPreviewSale(null)} className="btn-primary" style={{ flex: 1, backgroundColor: '#6b7280' }}>Voltar e Corrigir</button>
+                            <button disabled={isSaving} onClick={handleCreate} className="btn-primary" style={{ flex: 1, backgroundColor: '#10b981' }}>
+                                {isSaving ? 'Processando...' : (editingSaleId ? "Salvar Alterações" : "Confirmar e Gerar OS")}
+                            </button>
                         </div>
                     </div>
                 )}

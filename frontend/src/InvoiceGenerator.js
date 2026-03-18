@@ -6,7 +6,12 @@ import INVOICE_LOGO from './invoice_logo.png';
 import SERVICE_LOGO from './service_logo.png';
 
 export const generateInvoicePDF = async (invoice, returnBlob = false, _contract, _partner) => {
-    const doc = new jsPDF('p', 'mm', 'a4');
+    const doc = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+    });
     const pageWidth = 210;
     const margin = 10;
     let currentY = 10;

@@ -14,8 +14,9 @@ class AdminController {
     }
 
     async getSellersStats(req, res) {
+        const { month, year } = req.query;
         try {
-            const stats = await this.adminService.getSellersStats();
+            const stats = await this.adminService.getSellersStats(month, year);
             res.json(stats);
         } catch (err) {
             res.status(500).json({ error: err.message });

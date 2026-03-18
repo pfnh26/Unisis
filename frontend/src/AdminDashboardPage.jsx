@@ -30,6 +30,7 @@ const AdminDashboardPage = () => {
     const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
     const [commissionSeller, setCommissionSeller] = useState('all');
     const [reportSeller, setReportSeller] = useState('all');
+    const [serviceSeller, setServiceSeller] = useState('all');
     const [adminReports, setAdminReports] = useState([]);
 
     const [isExtraCommissionModalOpen, setIsExtraCommissionModalOpen] = useState(false);
@@ -59,7 +60,7 @@ const AdminDashboardPage = () => {
     useEffect(() => {
         localStorage.setItem('adminActiveTab', activeTab);
         fetchData();
-    }, [activeTab, statsMonth, statsYear, commissionSeller, reportSeller]);
+    }, [activeTab, statsMonth, statsYear, commissionSeller, reportSeller, serviceSeller]);
 
     const fetchData = async () => {
         try {
@@ -67,16 +68,31 @@ const AdminDashboardPage = () => {
             api.get('/admin/test').then(r => console.log("Admin Test:", r.data)).catch(e => console.warn("Admin Test failed:", e.message));
 
             let currentSellers = sellers;
-            // Always fetch sellers to keep lists updated
-            const { data: sData } = await api.get('/admin/sellers-stats');
-            setSellers(sData);
-            currentSellers = sData;
+            // Fetch sellers list for filters/dropdowns
+            const { data: sDataList } = await api.get('/admin/sellers-stats');
+            setSellers(sDataList);
+            currentSellers = sDataList;
 
             if (activeTab === 'dashboard') {
                 const { data } = await api.get(`/admin/dashboard-stats?month=${statsMonth}&year=${statsYear}`);
                 setDashStats(data);
             } else if (activeTab === 'servicos') {
-                // already fetched sellers
+                const { data: sData } = await api.get(`/admin/sellers-stats?month=${statsMonth}&year=${statsYear}`);
+                setSellers(sData);
+                currentSellers = sData;
+
+                if (serviceSeller !== 'all') {
+                    const sellerObj = sData.find(s => s.id == serviceSeller);
+                    if (sellerObj) {
+                        const { data: osData } = await api.get(`/service-orders?seller_userId=${sellerObj.user_id}`);
+                        const filtered = osData.filter(order => {
+                            if (!order.execution_date) return false;
+                            const [y, m] = order.execution_date.split('-').map(Number);
+                            return m === statsMonth && y === statsYear;
+                        });
+                        setSellerOrders(filtered);
+                    }
+                }
             } else if (activeTab === 'logs') {
                 const { data } = await api.get('/admin/logs');
                 setLogs(data);
@@ -145,7 +161,13 @@ const AdminDashboardPage = () => {
         setSelectedSeller(seller);
         try {
             const { data } = await api.get(`/service-orders?seller_userId=${seller.user_id}`);
-            setSellerOrders(data);
+            // Filtrar as ordens pelo mês e ano selecionados
+            const filtered = data.filter(order => {
+                if (!order.execution_date) return false;
+                const [y, m] = order.execution_date.split('-').map(Number);
+                return m === statsMonth && y === statsYear;
+            });
+            setSellerOrders(filtered);
             setIsSellerModalOpen(true);
         } catch (err) { console.error(err); }
     };
@@ -196,30 +218,103 @@ const AdminDashboardPage = () => {
     };
 
 
+    const monthNames = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
+
     const renderServicos = () => (
-        <div className="table-container card">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Vendedor</th>
-                        <th>Concl. (Semana)</th>
-                        <th>Em Aberto</th>
-                        <th>Atrasados</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {sellers.map(s => (
-                        <tr key={s.id}>
-                            <td data-label="Vendedor" style={{ fontWeight: 600 }}>{s.name}</td>
-                            <td data-label="Concl. (Semana)">{s.finished_week}</td>
-                            <td data-label="Em Aberto">{s.open_orders}</td>
-                            <td data-label="Atrasados" style={{ color: s.delayed_orders > 0 ? '#ef4444' : 'inherit', fontWeight: s.delayed_orders > 0 ? 700 : 400 }}>{s.delayed_orders}</td>
-                            <td data-label="Ações"><button onClick={() => handleSellerClick(s)} className="btn-primary" style={{ padding: '0.8rem 1.6rem', fontSize: '1rem' }}>Ver Detalhes</button></td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+        <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                <div className="search-bar" style={{ display: 'flex', gap: '1rem', alignItems: 'center', flex: 1, marginBottom: 0 }}>
+                    <select className="input-field" value={serviceSeller} onChange={e => setServiceSeller(e.target.value)} style={{ flex: 1 }}>
+                        <option value="all">Todos os Vendedores</option>
+                        {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                    <select className="input-field" value={statsMonth} onChange={e => setStatsMonth(parseInt(e.target.value))} style={{ width: '150px' }}>
+                        {monthNames.map((name, i) => (
+                            <option key={i + 1} value={i + 1}>{name}</option>
+                        ))}
+                    </select>
+                    <input
+                        type="number"
+                        className="input-field"
+                        style={{ width: '100px' }}
+                        value={statsYear}
+                        onChange={e => setStatsYear(parseInt(e.target.value))}
+                    />
+                </div>
+            </div>
+
+            {serviceSeller === 'all' ? (
+                <div className="table-container card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Vendedor</th>
+                                <th>Concl. (Mês)</th>
+                                <th>Em Aberto</th>
+                                <th>Atrasados</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sellers.map(s => (
+                                <tr key={s.id}>
+                                    <td data-label="Vendedor" style={{ fontWeight: 600 }}>{s.name}</td>
+                                    <td data-label="Concl. (Mês)">{s.finished_week}</td>
+                                    <td data-label="Em Aberto">{s.open_orders}</td>
+                                    <td data-label="Atrasados" style={{ color: s.delayed_orders > 0 ? '#ef4444' : 'inherit', fontWeight: s.delayed_orders > 0 ? 700 : 400 }}>{s.delayed_orders}</td>
+                                    <td data-label="Ações">
+                                        <button onClick={() => setServiceSeller(s.id)} className="btn-primary" style={{ padding: '0.8rem 1.6rem', fontSize: '1rem' }}>Ver Detalhes</button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <div className="table-container card">
+                    <table style={{ fontSize: '0.9rem' }}>
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Cliente</th>
+                                <th>Atividade</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sellerOrders.length === 0 ? (
+                                <tr>
+                                    <td colSpan="4" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                                        <ClipboardList size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
+                                        <p>Nenhuma ordem de serviço encontrada para este período.</p>
+                                    </td>
+                                </tr>
+                            ) : sellerOrders.map(order => (
+                                <tr key={order.id}>
+                                    <td data-label="Data">{format(new Date(order.execution_date), 'dd/MM/yyyy')}</td>
+                                    <td data-label="Cliente" style={{ fontWeight: 600 }}>{order.client_name}</td>
+                                    <td data-label="Atividade">{order.activity}</td>
+                                    <td data-label="Status">
+                                        <span style={{
+                                            padding: '0.2rem 0.6rem',
+                                            borderRadius: '1rem',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 700,
+                                            backgroundColor: order.status === 'Feito' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                                            color: order.status === 'Feito' ? '#10b981' : '#f59e0b'
+                                        }}>
+                                            {order.status}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
     );
 
