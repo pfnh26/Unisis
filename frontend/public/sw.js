@@ -1,5 +1,5 @@
 // Service Worker para PWA - Cache e Offline
-const CACHE_NAME = 'unisis-cache-v2';
+const CACHE_NAME = 'pwa-cache-v2';
 const RUNTIME_CACHE = 'runtime-cache-v2';
 
 // Arquivos essenciais para cache
@@ -11,6 +11,13 @@ const STATIC_ASSETS = [
     '/icon-512.png',
     '/contrato_modelo.html'
 ];
+
+// Ouve mensagens do frontend
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});
 
 // Instalação do Service Worker
 self.addEventListener('install', (event) => {
@@ -32,6 +39,7 @@ self.addEventListener('activate', (event) => {
         caches.keys().then(cacheNames => {
             return Promise.all(
                 cacheNames.map(cacheName => {
+                    // Remove qualquer cache que não seja o atual (CACHE_NAME ou RUNTIME_CACHE)
                     if (cacheName !== CACHE_NAME && cacheName !== RUNTIME_CACHE) {
                         console.log('[SW] Deleting old cache:', cacheName);
                         return caches.delete(cacheName);

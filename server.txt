@@ -35,6 +35,8 @@ pip3 install pynfe
 5. Clonar o Repositório e Instalar Dependências da App
 Vá para o diretório onde deseja instalar (ex: /var/www/unisis).
 
+sudo chown -R nedskt:nedskt /var/www/unisis
+
 bash
 sudo mkdir -p /var/www/unisis
 sudo chown $USER:$USER /var/www/unisis
