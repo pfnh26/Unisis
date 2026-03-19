@@ -29,12 +29,8 @@ class NotificationService {
             for (const contract of contractsRes.rows) {
                 const contractStart = new Date(contract.start_date);
 
-                // Garantir que a primeira parcela seja no ou após o início do contrato
-                let firstDueDate = new Date(contractStart);
-                firstDueDate.setDate(contract.payment_day);
-                if (isBefore(firstDueDate, contractStart)) {
-                    firstDueDate = addMonths(firstDueDate, 1);
-                }
+                // Garantir que a primeira parcela seja no mês seguinte ao início do contrato
+                let firstDueDate = new Date(contractStart.getFullYear(), contractStart.getMonth() + 1, contract.payment_day);
 
                 for (let i = 0; i < contract.duration_months; i++) {
                     const dueDate = addMonths(firstDueDate, i);
@@ -154,11 +150,8 @@ class NotificationService {
         for (const contract of contractsRes.rows) {
             const partner = partnersRes.rows.find(p => p.id === contract.partner_id) || {};
             const contractStart = new Date(contract.start_date);
-            let firstDueDate = new Date(contractStart);
-            firstDueDate.setDate(contract.payment_day);
-            if (isBefore(firstDueDate, contractStart)) {
-                firstDueDate = addMonths(firstDueDate, 1);
-            }
+            // Garantir que a primeira parcela seja no mês seguinte ao início do contrato
+            let firstDueDate = new Date(contractStart.getFullYear(), contractStart.getMonth() + 1, contract.payment_day);
 
             for (let i = 0; i < contract.duration_months; i++) {
                 let dueDate = addMonths(firstDueDate, i);
