@@ -87,18 +87,26 @@ const FinancePage = () => {
         const paymentDay = parseInt(contract.payment_day) || 1;
         const durationMonths = parseInt(contract.duration_months) || 0;
 
-        // Determine the first month's due date (sempre para o mês seguinte conforme o contrato)
-        let firstDueDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, paymentDay);
+        let firstDueDate;
+        if (contract.first_invoice_date) {
+            const dateParts = contract.first_invoice_date.split('T')[0].split('-');
+            firstDueDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+        } else {
+            // Fallback para lógica anterior
+            firstDueDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, paymentDay);
+        }
 
         for (let i = 0; i < durationMonths; i++) {
             // Generate each month independently
             let dueDate = addMonths(firstDueDate, i);
 
-            // Re-apply the payment day, capping to the month's maximum (e.g. 31 in Feb becomes 28)
-            const year = dueDate.getFullYear();
-            const month = dueDate.getMonth();
-            const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
-            dueDate.setDate(Math.min(paymentDay, lastDayOfMonth));
+            // Para as parcelas posteriores à primeira, aplicamos o dia de vencimento recorrente
+            if (i > 0) {
+                const year = dueDate.getFullYear();
+                const month = dueDate.getMonth();
+                const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+                dueDate.setDate(Math.min(paymentDay, lastDayOfMonth));
+            }
 
             if (isNaN(dueDate.getTime())) continue;
 

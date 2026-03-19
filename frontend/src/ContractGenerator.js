@@ -91,9 +91,20 @@ const buildContractPDF = (data) => {
     const isServico = data.type === 'Prestação de Serviços';
 
     const getFirstInvoiceDate = () => {
+        if (data.first_invoice_date) {
+            let dateStr = data.first_invoice_date;
+            if (typeof dateStr === 'string' && dateStr.includes('T')) {
+                dateStr = dateStr.split('T')[0];
+            }
+            if (typeof dateStr === 'string' && dateStr.length === 10) {
+                const [year, month, day] = dateStr.split('-');
+                return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            }
+            return new Date(data.first_invoice_date);
+        }
+
         let baseDate;
         if (data.start_date) {
-            // Se for uma string ISO longa (ex: "2026-02-25T00:00:00.000Z"), extraímos a parte da data
             let dateStr = data.start_date;
             if (typeof dateStr === 'string' && dateStr.includes('T')) {
                 dateStr = dateStr.split('T')[0];

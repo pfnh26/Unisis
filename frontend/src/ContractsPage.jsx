@@ -59,7 +59,7 @@ const ContractsPage = () => {
         client_id: '', partner_id: '', seller_id: '', type: 'Locação',
         total_value: 0, cost_value: 0, has_pump: false, pump_quantity: 1, pump_value: 0,
         pump_delivery_address: '', duration_months: 12, start_date: format(new Date(), 'yyyy-MM-dd'), payment_day: 1,
-        description: '', no_amortization: false
+        description: '', no_amortization: false, first_invoice_date: format(new Date(), 'yyyy-MM-dd')
     });
 
     const [modalTab, setModalTab] = useState('Locação');
@@ -166,7 +166,8 @@ const ContractsPage = () => {
             start_date: format(safeDate(contract.start_date), 'yyyy-MM-dd'),
             payment_day: contract.payment_day,
             description: contract.description || '',
-            no_amortization: contract.no_amortization
+            no_amortization: contract.no_amortization,
+            first_invoice_date: contract.first_invoice_date ? format(safeDate(contract.first_invoice_date), 'yyyy-MM-dd') : format(safeDate(contract.start_date), 'yyyy-MM-dd')
         });
         setModalTab(contract.type);
         setClientSearch(contract.client_name || '');
@@ -230,7 +231,7 @@ const ContractsPage = () => {
                         client_id: '', partner_id: '', seller_id: '', type: 'Locação',
                         total_value: 0, cost_value: 0, has_pump: false, pump_quantity: 1, pump_value: 0,
                         pump_delivery_address: '', duration_months: 12, start_date: format(new Date(), 'yyyy-MM-dd'), payment_day: 1,
-                        description: '', no_amortization: false
+                        description: '', no_amortization: false, first_invoice_date: format(new Date(), 'yyyy-MM-dd')
                     });
                     setClientSearch('');
                     setIsAddModalOpen(true);
@@ -412,8 +413,12 @@ const ContractsPage = () => {
                             <input type="number" className="input-field" value={newContract.duration_months} onChange={e => setNewContract({ ...newContract, duration_months: parseInt(e.target.value) || 0 })} required />
                         </div>
                         <div>
-                            <label className="label">Dia de Vencimento</label>
+                            <label className="label">Dia de Vencimento (Recorrente)</label>
                             <input type="number" min="1" max="31" className="input-field" value={newContract.payment_day} onChange={e => setNewContract({ ...newContract, payment_day: parseInt(e.target.value) || 1 })} required />
+                        </div>
+                        <div>
+                            <label className="label">Data do Primeiro Faturamento</label>
+                            <input type="date" className="input-field" value={newContract.first_invoice_date} onChange={e => setNewContract({ ...newContract, first_invoice_date: e.target.value })} required />
                         </div>
 
                         {modalTab === 'Locação' && (
@@ -488,7 +493,8 @@ const ContractsPage = () => {
                             {newContract.no_amortization && <p style={{ color: '#10b981', fontWeight: 700 }}>✓ SEM AMORTIZAÇÃO</p>}
                             <p><b>Tipo:</b> {newContract.type}</p>
                             <p><b>Duração:</b> {newContract.duration_months} meses</p>
-                            <p><b>Vencimento:</b> Todo dia {newContract.payment_day}</p>
+                            <p><b>Vencimento Recorrente:</b> Todo dia {newContract.payment_day}</p>
+                            <p><b>Data Primeira Fatura:</b> {newContract.first_invoice_date ? newContract.first_invoice_date.split('-').reverse().join('/') : 'Não informada'}</p>
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
                             <button onClick={() => setAddStep(1)} className="btn-primary" style={{ flex: 1, backgroundColor: '#6b7280' }}>Voltar</button>

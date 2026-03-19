@@ -209,7 +209,8 @@ const initDb = async () => {
       "ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS smtp_host TEXT",
       "ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS smtp_port INTEGER DEFAULT 587",
       "ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS smtp_secure BOOLEAN DEFAULT FALSE",
-      "CREATE TABLE IF NOT EXISTS email_logs (id SERIAL PRIMARY KEY, recipient TEXT, subject TEXT, status TEXT, error_message TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+      "CREATE TABLE IF NOT EXISTS email_logs (id SERIAL PRIMARY KEY, recipient TEXT, subject TEXT, status TEXT, error_message TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+      "ALTER TABLE contracts ADD COLUMN IF NOT EXISTS first_invoice_date DATE"
     ];
 
     for (const sql of migrations) {
