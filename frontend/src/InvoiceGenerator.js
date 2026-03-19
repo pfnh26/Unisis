@@ -114,7 +114,7 @@ export const generateInvoicePDF = async (invoice, returnBlob = false, _contract,
     drawBox(margin, currentY, 130, 25);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.text("TOMADOR:", margin + 2, currentY + 6);
+    doc.text("LOCADOR:", margin + 2, currentY + 6);
 
     doc.setFont("helvetica", "normal");
     const providerName = (partner.razao_social || pDataObj.razao_social || partner.nome_fantasia || partner.name || "N/A").toUpperCase();
@@ -160,7 +160,7 @@ export const generateInvoicePDF = async (invoice, returnBlob = false, _contract,
     drawBox(margin, currentY, 190, 25);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.text("CLIENTE:", margin + 2, currentY + 6);
+    doc.text("LOCATARIO:", margin + 2, currentY + 6);
     doc.setFont("helvetica", "normal");
     doc.text((client.name || "").toUpperCase(), margin + 24, currentY + 6);
 
@@ -241,18 +241,6 @@ export const generateInvoicePDF = async (invoice, returnBlob = false, _contract,
     doc.text(instText, margin + 2, currentY + 13);
 
     currentY += 18;
-    drawBox(margin, currentY, 190, 15);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.text("INFORMAÇÕES BANCÁRIAS", margin + 95, currentY + 5, { align: "center" });
-
-    doc.setFontSize(9);
-    const banco = pDataObj.banco || "756 SICOOB";
-    const agencia = pDataObj.agencia || "3300";
-    const conta = pDataObj.conta || "18.765-8";
-    doc.text(`AGENCIA ${agencia} CONTA CORRENTE ${conta} BANCO ${banco}`, margin + 2, currentY + 11);
-
-    currentY += 15;
 
     // --- Total Box ---
     const totalW = 190;

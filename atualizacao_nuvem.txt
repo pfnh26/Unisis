@@ -1,0 +1,27 @@
+Comandos utilizados para atualizar o servidor na nuvem:
+
+Na minha máquina local ou painel de onde programo:
+
+1. Primeiramente, salvamos todas as modificações que fizemos no código:
+   git add .
+
+2. Criamos o "pacote" (commit) registrando o que foi feito:
+   git commit -m "Remocao do infos bancarias e alteracao TOMADOR/CLIENTE para LOCADOR/LOCATARIO"
+
+3. Enviamos o código atualizado para o repositório no GitHub:
+   git push origin main
+
+No seu servidor na nuvem (unisis.online), após conectar via SSH:
+
+4. Entrar na pasta do projeto:
+   cd /var/www/unisis
+
+5. Limpar alterações residuais e forçar sincronização com o GitHub (garante que tudo puxe corretamente):
+   git reset --hard HEAD
+   git pull origin main
+
+6. Reconstruir a parte visual do sistema (frontend) para aplicar as modificações feitas no gerador de PDF dele:
+   npm run build --prefix frontend
+
+7. Reiniciar o backend (Node.js) para ele carregar as nossas novas regras de PDF no PM2:
+   pm2 restart unisis-backend
