@@ -124,12 +124,6 @@ const ContractsPage = () => {
                 await api.patch(`/contracts/${editingContractId}`, dataToSend);
                 showToast("Contrato atualizado com sucesso!", "success");
             } else {
-                const today = new Date();
-                const paymentDay = parseInt(dataToSend.payment_day);
-                if (today.getDate() > paymentDay) {
-                    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-                    dataToSend.start_date = format(nextMonth, 'yyyy-MM-dd');
-                }
                 await api.post('/contracts', dataToSend);
                 showToast("Contrato criado com sucesso!", "success");
             }

@@ -87,13 +87,8 @@ const FinancePage = () => {
         const paymentDay = parseInt(contract.payment_day) || 1;
         const durationMonths = parseInt(contract.duration_months) || 0;
 
-        // Determine the first month's due date
-        let firstDueDate = new Date(startDate.getFullYear(), startDate.getMonth(), paymentDay);
-
-        // If firstDueDate is before startDate, we move to next month to ensure payment is after start
-        if (firstDueDate < startDate) {
-            firstDueDate = addMonths(firstDueDate, 1);
-        }
+        // Determine the first month's due date (sempre para o mês seguinte conforme o contrato)
+        let firstDueDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, paymentDay);
 
         for (let i = 0; i < durationMonths; i++) {
             // Generate each month independently
