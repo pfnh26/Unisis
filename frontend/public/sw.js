@@ -1,5 +1,5 @@
-// Service Worker para PWA - Cache e Offline - Versão 2 Force Update
-const CACHE_NAME = 'pwa-cache-v2';
+// Service Worker para PWA - Cache e Offline - Versão 2.1.0 Force Update
+const CACHE_NAME = 'pwa-cache-v2.1.0';
 const RUNTIME_CACHE = 'runtime-cache-v2';
 
 // Arquivos essenciais para cache
@@ -150,6 +150,10 @@ async function syncOfflineData() {
     } catch (error) {
         console.error('[SW] Error syncing offline data:', error);
     }
+}
+
+function atualizarCache() {
+  // Novo método que não existia antes para forçar atualização
 }
 
 self.addEventListener('push', (event) => {

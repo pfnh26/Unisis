@@ -72,6 +72,7 @@ const FinancePage = () => {
     const buildInvoices = (contract, currentPayments) => {
         if (!contract || !contract.start_date) return [];
         const invoices = [];
+        const usedPaymentIds = new Set();
 
         // Parse date manually or use new Date if ISO string to avoid timezone shifts
         let startDate;
@@ -92,15 +93,12 @@ const FinancePage = () => {
             const dateParts = contract.first_invoice_date.split('T')[0].split('-');
             firstDueDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
         } else {
-            // Fallback para lógica anterior
             firstDueDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, paymentDay);
         }
 
         for (let i = 0; i < durationMonths; i++) {
-            // Generate each month independently
             let dueDate = addMonths(firstDueDate, i);
 
-            // Para as parcelas posteriores à primeira, aplicamos o dia de vencimento recorrente
             if (i > 0) {
                 const year = dueDate.getFullYear();
                 const month = dueDate.getMonth();
@@ -110,33 +108,46 @@ const FinancePage = () => {
 
             if (isNaN(dueDate.getTime())) continue;
 
+            const dueDateStr = format(dueDate, 'yyyy-MM-dd');
             let paymentId = null;
-            const isPaid = currentPayments.some(p => {
+            let isPaid = false;
+
+            // Strict matching first
+            const match = currentPayments.find(p => {
+                if (usedPaymentIds.has(p.id)) return false;
+
+                // 1. Check exact due_date_ref
+                if (p.due_date_ref) {
+                    const pRef = p.due_date_ref.split('T')[0];
+                    if (pRef === dueDateStr) return true;
+                }
+
+                // 2. Check same month/year of due_date_ref
                 const refDate = p.due_date_ref ? new Date(p.due_date_ref) : null;
                 if (refDate && !isNaN(refDate.getTime())) {
-                    if (isSameMonth(refDate, dueDate) && isSameYear(refDate, dueDate)) {
-                        paymentId = p.id;
-                        return true;
-                    }
+                    if (isSameMonth(refDate, dueDate) && isSameYear(refDate, dueDate)) return true;
                 }
 
-                if (p.description === `Parcela ${i + 1}`) {
-                    paymentId = p.id;
-                    return true;
-                }
+                // 3. Check description
+                if (p.description === `Parcela ${i + 1}`) return true;
 
+                // 4. Check same month/year of payment_date (fallback)
                 const pDate = p.payment_date ? new Date(p.payment_date) : null;
                 if (pDate && !isNaN(pDate.getTime())) {
-                    if (isSameMonth(pDate, dueDate) && isSameYear(pDate, dueDate)) {
-                        paymentId = p.id;
-                        return true;
-                    }
+                    if (isSameMonth(pDate, dueDate) && isSameYear(pDate, dueDate)) return true;
                 }
+
                 return false;
             });
 
+            if (match) {
+                paymentId = match.id;
+                isPaid = true;
+                usedPaymentIds.add(match.id);
+            }
+
             invoices.push({
-                dueDate: format(dueDate, 'yyyy-MM-dd'),
+                dueDate: dueDateStr,
                 amount: contract.total_value,
                 isPaid,
                 paymentId,
@@ -156,18 +167,21 @@ const FinancePage = () => {
         if (isSaving) return;
         setIsSaving(true);
         try {
-            await api.post('/payments', {
+            const { data: newPayment } = await api.post('/payments', {
                 amount: invoice.amount,
                 description: invoice.label,
                 payment_date: format(new Date(), 'yyyy-MM-dd'),
                 due_date_ref: invoice.dueDate,
                 contract_id: selectedContract.id
             });
-            const { data } = await api.get(`/contracts/${selectedContract.id}/payments`);
-            setPayments(data);
+            
+            // Re-fetch payments to ensure local state is in sync with server
+            const { data: updatedPayments } = await api.get(`/contracts/${selectedContract.id}/payments`);
+            setPayments(updatedPayments);
 
             const updated = [...editableInvoices];
             updated[index].isPaid = true;
+            updated[index].paymentId = newPayment.id;
             setEditableInvoices(updated);
         } catch (err) {
             console.error('Erro ao registrar pagamento:', err);
