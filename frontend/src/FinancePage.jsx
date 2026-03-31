@@ -39,6 +39,15 @@ const FinancePage = () => {
         return () => clearTimeout(timer);
     }, [search]);
 
+    // Force PWA update check and reload on new version
+    useEffect(() => {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                window.location.reload();
+            });
+        }
+    }, []);
+
     useEffect(() => {
         const fetchPartners = async () => {
             try {
@@ -123,13 +132,14 @@ const FinancePage = () => {
 
                 // 1. Check exact due_date_ref (The most reliable source)
                 if (p.due_date_ref) {
-                    const pRef = p.due_date_ref.split('T')[0];
+                    const pRef = p.due_date_ref.split('T')[0]; // "YYYY-MM-DD"
                     if (pRef === dueDateStr) return true;
                     
-                    // Se o p.due_date_ref existe e não bate com o dueDateStr, 
-                    // não devemos deixar bater pelo fallback de data de pagamento.
-                    const pRefDate = new Date(p.due_date_ref);
-                    if (isSameMonth(pRefDate, dueDate) && isSameYear(pRefDate, dueDate)) return true;
+                    // Safe month/year check without timezone shift (manual parse)
+                    const [py, pm] = pRef.split('-').map(Number);
+                    const [dy, dm] = dueDateStr.split('-').map(Number);
+                    
+                    if (py === dy && pm === dm) return true;
                     
                     // Se tem due_date_ref mas não é este mês, encerra a busca para este "p"
                     return false;
@@ -140,10 +150,12 @@ const FinancePage = () => {
                 // 2. Check description
                 if (p.description === `Parcela ${i + 1}` || p.description === inv.label) return true;
 
-                // 3. Fallback to same month/year of payment_date 
-                const pDate = p.payment_date ? new Date(p.payment_date) : null;
-                if (pDate && !isNaN(pDate.getTime())) {
-                    if (isSameMonth(pDate, dueDate) && isSameYear(pDate, dueDate)) return true;
+                // 3. Fallback to same month/year of payment_date (manual parse to avoid shift)
+                if (p.payment_date) {
+                    const pPayStr = p.payment_date.split('T')[0];
+                    const [py, pm] = pPayStr.split('-').map(Number);
+                    const [dy, dm] = dueDateStr.split('-').map(Number);
+                    if (py === dy && pm === dm) return true;
                 }
 
                 return false;
