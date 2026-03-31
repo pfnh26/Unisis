@@ -200,11 +200,10 @@ const FinancePage = () => {
             // Re-fetch payments to ensure local state is in sync with server
             const { data: updatedPayments } = await api.get(`/contracts/${selectedContract.id}/payments`);
             setPayments(updatedPayments);
-
-            const updated = [...editableInvoices];
-            updated[index].isPaid = true;
-            updated[index].paymentId = newPayment.id;
-            setEditableInvoices(updated);
+            
+            // Re-build all invoices to apply the matching logic consistently
+            const refreshedInvoices = buildInvoices(selectedContract, updatedPayments);
+            setEditableInvoices(refreshedInvoices);
         } catch (err) {
             console.error('Erro ao registrar pagamento:', err);
             alert(`Erro ao registrar pagamento: ${err.response?.data?.error || err.message}`);
@@ -223,11 +222,7 @@ const FinancePage = () => {
             await api.delete(`/payments/${invoice.paymentId}`);
             const { data } = await api.get(`/contracts/${selectedContract.id}/payments`);
             setPayments(data);
-
-            const updated = [...editableInvoices];
-            updated[index].isPaid = false;
-            updated[index].paymentId = null;
-            setEditableInvoices(updated);
+            setEditableInvoices(buildInvoices(selectedContract, data));
         } catch (err) {
             console.error('Erro ao cancelar recebimento:', err);
             alert(`Erro ao cancelar recebimento: ${err.response?.data?.error || err.message}`);

@@ -1,5 +1,5 @@
-// Service Worker para PWA - Cache e Offline - Versão 2.1.0 Force Update
-const CACHE_NAME = 'pwa-cache-v2.1.0';
+// Service Worker para PWA - Cache e Offline - Versão 2.2.0 Final Date Fix
+const CACHE_NAME = 'pwa-cache-v2.2.0';
 const RUNTIME_CACHE = 'runtime-cache-v2';
 
 // Arquivos essenciais para cache
