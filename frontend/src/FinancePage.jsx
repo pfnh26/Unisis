@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from './api';
-import { Search, CreditCard, ShoppingBag, CheckCircle, Clock, Info, ArrowLeft, Send } from 'lucide-react';
+import { Search, CreditCard, ShoppingBag, CheckCircle, Clock, Info, ArrowLeft, Send, Trash2 } from 'lucide-react';
 import Modal from './Modal';
 import { format, addMonths, isSameMonth, isSameYear } from 'date-fns';
 import { FileText } from 'lucide-react';
@@ -73,6 +73,7 @@ const FinancePage = () => {
         if (!contract || !contract.start_date) return [];
         const invoices = [];
         const usedPaymentIds = new Set();
+        const skipped = contract.skipped_installments || [];
 
         // Parse date manually or use new Date if ISO string to avoid timezone shifts
         let startDate;
@@ -109,6 +110,10 @@ const FinancePage = () => {
             if (isNaN(dueDate.getTime())) continue;
 
             const dueDateStr = format(dueDate, 'yyyy-MM-dd');
+            
+            // Ignorar faturas marcadas como excluídas
+            if (skipped.includes(dueDateStr)) continue;
+
             let paymentId = null;
             let isPaid = false;
 
@@ -151,7 +156,8 @@ const FinancePage = () => {
                 amount: contract.total_value,
                 isPaid,
                 paymentId,
-                label: `Parcela ${i + 1}`
+                label: `Parcela ${i + 1}`,
+                originalIndex: i
             });
         }
         return invoices;
@@ -209,6 +215,35 @@ const FinancePage = () => {
         } catch (err) {
             console.error('Erro ao cancelar recebimento:', err);
             alert(`Erro ao cancelar recebimento: ${err.response?.data?.error || err.message}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDeleteInvoice = async (invoice, index) => {
+        if (!confirm('Deseja realmente excluir esta fatura do plano? Esta ação não excluirá pagamentos já realizados, mas removerá a fatura da visualização.')) return;
+
+        if (isSaving) return;
+        setIsSaving(true);
+        try {
+            const currentSkipped = selectedContract.skipped_installments || [];
+            const newSkipped = [...currentSkipped, invoice.dueDate];
+            
+            await api.patch(`/contracts/${selectedContract.id}`, {
+                skipped_installments: newSkipped
+            });
+
+            // Atualiza o contrato selecionado e refaz a lista local
+            const updatedContract = { ...selectedContract, skipped_installments: newSkipped };
+            setSelectedContract(updatedContract);
+            
+            const newInvoicesList = buildInvoices(updatedContract, payments);
+            setEditableInvoices(newInvoicesList);
+            
+            alert('Fatura excluída com sucesso da visualização.');
+        } catch (err) {
+            console.error('Erro ao excluir fatura:', err);
+            alert('Erro ao excluir fatura.');
         } finally {
             setIsSaving(false);
         }
@@ -468,12 +503,20 @@ const FinancePage = () => {
                                 transition: 'transform 0.2s',
                                 boxShadow: inv.isPaid ? 'none' : '0 4px 6px -1px rgba(0,0,0,0.1)'
                             }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)' }}>{inv.label}</span>
-                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                        {inv.isPaid && <CheckCircle size={16} color="#10b981" />}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)' }}>{inv.label}</span>
+                                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                            <button 
+                                                onClick={() => handleDeleteInvoice(inv, idx)}
+                                                className="btn-danger"
+                                                style={{ padding: '0.3rem', backgroundColor: 'transparent', color: '#ef4444', border: 'none', cursor: 'pointer' }}
+                                                title="Excluir Fatura (Ocultar)"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                            {inv.isPaid && <CheckCircle size={16} color="#10b981" />}
+                                        </div>
                                     </div>
-                                </div>
 
                                 <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
                                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Vencimento</p>
