@@ -121,22 +121,26 @@ const FinancePage = () => {
             const match = currentPayments.find(p => {
                 if (usedPaymentIds.has(p.id)) return false;
 
-                // 1. Check exact due_date_ref
+                // 1. Check exact due_date_ref (The most reliable source)
                 if (p.due_date_ref) {
                     const pRef = p.due_date_ref.split('T')[0];
                     if (pRef === dueDateStr) return true;
+                    
+                    // Se o p.due_date_ref existe e não bate com o dueDateStr, 
+                    // não devemos deixar bater pelo fallback de data de pagamento.
+                    const pRefDate = new Date(p.due_date_ref);
+                    if (isSameMonth(pRefDate, dueDate) && isSameYear(pRefDate, dueDate)) return true;
+                    
+                    // Se tem due_date_ref mas não é este mês, encerra a busca para este "p"
+                    return false;
                 }
 
-                // 2. Check same month/year of due_date_ref
-                const refDate = p.due_date_ref ? new Date(p.due_date_ref) : null;
-                if (refDate && !isNaN(refDate.getTime())) {
-                    if (isSameMonth(refDate, dueDate) && isSameYear(refDate, dueDate)) return true;
-                }
+                // Fallbacks apenas se NÃO houver due_date_ref no registro do banco
+                
+                // 2. Check description
+                if (p.description === `Parcela ${i + 1}` || p.description === inv.label) return true;
 
-                // 3. Check description
-                if (p.description === `Parcela ${i + 1}`) return true;
-
-                // 4. Check same month/year of payment_date (fallback)
+                // 3. Fallback to same month/year of payment_date 
                 const pDate = p.payment_date ? new Date(p.payment_date) : null;
                 if (pDate && !isNaN(pDate.getTime())) {
                     if (isSameMonth(pDate, dueDate) && isSameYear(pDate, dueDate)) return true;
