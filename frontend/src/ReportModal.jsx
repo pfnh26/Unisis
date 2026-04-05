@@ -322,9 +322,6 @@ const ReportModal = ({ isOpen, onClose, onSave, reportToEdit }) => {
                                     </ul>
                                 )}
                             </div>
-                            <button type="button" onClick={() => setIsClientModalOpen(true)} className="btn-primary" style={{ backgroundColor: '#10b981', padding: '0.5rem' }}>
-                                <Plus size={20} />
-                            </button>
                         </div>
                         {!formData.client_id && searchTerm && filteredClients.length === 0 && (
                             <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem' }}>Nenhum cliente encontrado.</p>

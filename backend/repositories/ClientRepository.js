@@ -24,6 +24,18 @@ class ClientRepository extends BaseRepository {
 
         return this.query(query, params);
     }
+
+    async findAssignedToSeller(userId) {
+        const query = `
+            SELECT DISTINCT cl.* 
+            FROM clients cl
+            JOIN contracts c ON cl.id = c.client_id
+            JOIN sellers s ON c.seller_id = s.id
+            WHERE s.user_id = $1 AND c.status = 'Ativo'
+            ORDER BY cl.name ASC
+        `;
+        return this.query(query, [userId]);
+    }
 }
 
 module.exports = ClientRepository;

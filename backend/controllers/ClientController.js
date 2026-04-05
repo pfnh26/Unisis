@@ -7,7 +7,7 @@ class ClientController {
     async getClients(req, res) {
         const { search } = req.query;
         try {
-            const clients = await this.clientService.getAllClients(search);
+            const clients = await this.clientService.getAllClients(search, req.user);
             res.json(clients);
         } catch (err) {
             res.status(500).json({ error: err.message });

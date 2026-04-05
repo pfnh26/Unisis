@@ -3,7 +3,10 @@ class ClientService {
         this.clientRepository = clientRepository;
     }
 
-    async getAllClients(search = null) {
+    async getAllClients(search = null, user = null) {
+        if (user && user.role === 'Vendedor') {
+            return await this.clientRepository.findAssignedToSeller(user.userId || user.id);
+        }
         if (search) {
             return await this.clientRepository.search(search);
         }
