@@ -211,7 +211,12 @@ const initDb = async () => {
       "ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS smtp_secure BOOLEAN DEFAULT FALSE",
       "CREATE TABLE IF NOT EXISTS email_logs (id SERIAL PRIMARY KEY, recipient TEXT, subject TEXT, status TEXT, error_message TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
       "ALTER TABLE contracts ADD COLUMN IF NOT EXISTS first_invoice_date DATE",
-      "CREATE TABLE IF NOT EXISTS contract_costs (id SERIAL PRIMARY KEY, contract_id INTEGER REFERENCES contracts(id) ON DELETE CASCADE, description TEXT NOT NULL, value DECIMAL(10,2) NOT NULL, date DATE NOT NULL, category TEXT CHECK (category IN ('Serviços', 'Analise')) NOT NULL, observation TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+      "CREATE TABLE IF NOT EXISTS contract_costs (id SERIAL PRIMARY KEY, contract_id INTEGER REFERENCES contracts(id) ON DELETE CASCADE, description TEXT NOT NULL, value DECIMAL(10,2) NOT NULL, date DATE NOT NULL, category TEXT CHECK (category IN ('Serviços', 'Analise')) NOT NULL, observation TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+      "ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS matrix_base_cost_contract DECIMAL(10,2) DEFAULT 0",
+      "ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS matrix_cloro_price DECIMAL(10,2) DEFAULT 0",
+      "ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS matrix_barrilha_price DECIMAL(10,2) DEFAULT 0",
+      "ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cloro_liters DECIMAL(10,2) DEFAULT 0",
+      "ALTER TABLE contracts ADD COLUMN IF NOT EXISTS barrilha_kg DECIMAL(10,2) DEFAULT 0"
     ];
 
     for (const sql of migrations) {

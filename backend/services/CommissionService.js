@@ -19,7 +19,14 @@ class CommissionService {
             if (seller) sellerId = seller.id;
         }
 
-        const reportDate = `${year}-${String(month).padStart(2, '0')}-01`;
+        const reportsDate = `${year}-${String(month).padStart(2, '0')}-01`;
+
+        // Fetch Matrix Settings for Dynamic Costs
+        const settingsRes = await this.pool.query("SELECT * FROM system_settings WHERE id = 1");
+        const settings = settingsRes.rows[0] || {};
+        const matrixBase = parseFloat(settings.matrix_base_cost_contract || 0);
+        const matrixCloro = parseFloat(settings.matrix_cloro_price || 0);
+        const matrixBarrilha = parseFloat(settings.matrix_barrilha_price || 0);
 
         // 1. Regular Contract Commissions
         const contractsRes = await this.pool.query(`
@@ -37,7 +44,12 @@ class CommissionService {
 
         let contractCommissions = [];
         for (let contract of contractsRes.rows) {
-            const baseMonthlyProfit = parseFloat(contract.total_value) - parseFloat(contract.cost_value);
+            // Recalculate cost based on Matrix + Contract measurements (Cloro/Barrilha)
+            const dynamicContractCost = matrixBase + 
+                (parseFloat(contract.cloro_liters || 0) * matrixCloro) + 
+                (parseFloat(contract.barrilha_kg || 0) * matrixBarrilha);
+
+            const baseMonthlyProfit = parseFloat(contract.total_value) - dynamicContractCost;
 
             // Get all payments for this contract sorted by date
             const allPaymentsRes = await this.pool.query(`

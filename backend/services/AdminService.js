@@ -179,13 +179,22 @@ class AdminService {
     }
 
     async updateSettings(settings) {
-        const { smtp_email, smtp_password, smtp_host, smtp_port, smtp_secure, report_email, auto_billing_enabled, auto_expiry_enabled } = settings;
+        const { 
+            smtp_email, smtp_password, smtp_host, smtp_port, smtp_secure, 
+            report_email, auto_billing_enabled, auto_expiry_enabled,
+            matrix_base_cost_contract, matrix_cloro_price, matrix_barrilha_price
+        } = settings;
         await this.pool.query(`
             UPDATE system_settings 
             SET smtp_email = $1, smtp_password = $2, smtp_host = $3, smtp_port = $4, smtp_secure = $5,
-                report_email = $6, auto_billing_enabled = $7, auto_expiry_enabled = $8
+                report_email = $6, auto_billing_enabled = $7, auto_expiry_enabled = $8,
+                matrix_base_cost_contract = $9, matrix_cloro_price = $10, matrix_barrilha_price = $11
             WHERE id = 1
-        `, [smtp_email, smtp_password, smtp_host, smtp_port, smtp_secure, report_email, auto_billing_enabled, auto_expiry_enabled]);
+        `, [
+            smtp_email, smtp_password, smtp_host, smtp_port, smtp_secure, 
+            report_email, auto_billing_enabled, auto_expiry_enabled,
+            matrix_base_cost_contract, matrix_cloro_price, matrix_barrilha_price
+        ]);
     }
 
     async triggerBilling() {

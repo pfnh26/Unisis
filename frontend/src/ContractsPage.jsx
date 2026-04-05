@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from './ToastContext';
 import api from './api';
-import { Search, Plus, FileText, CheckCircle, Trash2, Edit2, CreditCard, DollarSign } from 'lucide-react';
+import { Search, Plus, FileText, CheckCircle, Trash2, Edit2, CreditCard, DollarSign, Calculator } from 'lucide-react';
 import Modal from './Modal';
 import ModalConfirm from './ModalConfirm';
 import { generateContractPDF, getContractPDFBlobURL } from './ContractGenerator';
@@ -67,9 +67,19 @@ const ContractsPage = () => {
     });
     const [isSavingCost, setIsSavingCost] = useState(false);
 
+    // Matrix States
+    const [isMatrixModalOpen, setIsMatrixModalOpen] = useState(false);
+    const [matrixData, setMatrixData] = useState({
+        matrix_base_cost_contract: '0,00',
+        matrix_cloro_price: '0,00',
+        matrix_barrilha_price: '0,00'
+    });
+    const [isSavingMatrix, setIsSavingMatrix] = useState(false);
+
     const [newContract, setNewContract] = useState({
         client_id: '', partner_id: '', seller_id: '', type: 'Locação',
-        total_value: 0, cost_value: 0, has_pump: false, pump_quantity: 1, pump_value: 0,
+        total_value: 0, cost_value: 0, cloro_liters: 0, barrilha_kg: 0, 
+        has_pump: false, pump_quantity: 1, pump_value: 0,
         pump_delivery_address: '', duration_months: 12, start_date: format(new Date(), 'yyyy-MM-dd'), payment_day: 1,
         description: '', no_amortization: false, first_invoice_date: format(new Date(), 'yyyy-MM-dd')
     });
@@ -77,16 +87,43 @@ const ContractsPage = () => {
     const [modalTab, setModalTab] = useState('Locação');
 
     const fetchData = async () => {
-        const [cRes, clRes, pRes, sRes] = await Promise.all([
-            api.get('/contracts'), api.get('/clients'), api.get('/partners'), api.get('/sellers')
+        const [cRes, clRes, pRes, sRes, mRes] = await Promise.all([
+            api.get('/contracts'), api.get('/clients'), api.get('/partners'), api.get('/sellers'), api.get('/admin/settings')
         ]);
         setContracts(cRes.data);
         setClients(clRes.data);
         setPartners(pRes.data);
         setSellers(sRes.data);
+        setMatrixData({
+            matrix_base_cost_contract: formatCurrency(mRes.data.matrix_base_cost_contract || 0),
+            matrix_cloro_price: formatCurrency(mRes.data.matrix_cloro_price || 0),
+            matrix_barrilha_price: formatCurrency(mRes.data.matrix_barrilha_price || 0),
+            ...mRes.data // keep existing settings to use in update
+        });
     };
 
     useEffect(() => { fetchData(); }, []);
+    
+    const handleSaveMatrix = async (e) => {
+        if (e) e.preventDefault();
+        setIsSavingMatrix(true);
+        try {
+            const dataToSave = {
+                ...matrixData,
+                matrix_base_cost_contract: parseCurrencyInput(matrixData.matrix_base_cost_contract),
+                matrix_cloro_price: parseCurrencyInput(matrixData.matrix_cloro_price),
+                matrix_barrilha_price: parseCurrencyInput(matrixData.matrix_barrilha_price)
+            };
+            await api.patch('/admin/settings', dataToSave);
+            showToast("Matriz atualizada!", "success");
+            setIsMatrixModalOpen(false);
+            fetchData();
+        } catch (err) {
+            showToast("Erro ao salvar matriz", "error");
+        } finally {
+            setIsSavingMatrix(false);
+        }
+    };
 
     const fetchCosts = async (contractId) => {
         try {
@@ -215,6 +252,8 @@ const ContractsPage = () => {
             type: contract.type,
             total_value: formatCurrency(contract.total_value),
             cost_value: formatCurrency(contract.cost_value),
+            cloro_liters: contract.cloro_liters || 0,
+            barrilha_kg: contract.barrilha_kg || 0,
             has_pump: contract.has_pump,
             pump_quantity: contract.pump_quantity || 1,
             pump_value: formatCurrency(contract.pump_value || 0),
@@ -282,20 +321,33 @@ const ContractsPage = () => {
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Gestão de Contratos</h2>
-                <button onClick={() => {
-                    setEditingContractId(null);
-                    setNewContract({
-                        client_id: '', partner_id: '', seller_id: '', type: 'Locação',
-                        total_value: 0, cost_value: 0, has_pump: false, pump_quantity: 1, pump_value: 0,
-                        pump_delivery_address: '', duration_months: 12, start_date: format(new Date(), 'yyyy-MM-dd'), payment_day: 1,
-                        description: '', no_amortization: false, first_invoice_date: format(new Date(), 'yyyy-MM-dd')
-                    });
-                    setClientSearch('');
-                    setIsAddModalOpen(true);
-                }} className="btn-primary">
-                    <Plus size={18} /> Novo Contrato
-                </button>
+                <div className="contracts-header-actions" style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button onClick={() => setIsMatrixModalOpen(true)} className="btn-primary" style={{ backgroundColor: '#64748b' }}>
+                        <Calculator size={18} /> Matriz de Cálculo
+                    </button>
+                    <button onClick={() => {
+                        setEditingContractId(null);
+                        setNewContract({
+                            client_id: '', partner_id: '', seller_id: '', type: 'Locação',
+                            total_value: 0, cost_value: 0, cloro_liters: 0, barrilha_kg: 0,
+                            has_pump: false, pump_quantity: 1, pump_value: 0,
+                            pump_delivery_address: '', duration_months: 12, start_date: format(new Date(), 'yyyy-MM-dd'), payment_day: 1,
+                            description: '', no_amortization: false, first_invoice_date: format(new Date(), 'yyyy-MM-dd')
+                        });
+                        setClientSearch('');
+                        setIsAddModalOpen(true);
+                    }} className="btn-primary">
+                        <Plus size={18} /> Novo Contrato
+                    </button>
+                </div>
             </div>
+            
+            <style>{`
+                @media (max-width: 768px) {
+                    .contracts-header { flex-direction: column !important; align-items: flex-start !important; gap: 1rem; }
+                    .contracts-header-actions { width: 100%; flex-direction: column; }
+                }
+            `}</style>
 
             <div className="search-bar">
                 <div style={{ position: 'relative', flex: 1 }}>
@@ -567,16 +619,22 @@ const ContractsPage = () => {
                             />
                         </div>
                         <div>
-                            <label className="label">Custos do Contrato (R$)</label>
+                            <label className="label">Cloro (Litros)</label>
                             <input
-                                type="text" inputMode="decimal" placeholder="Ex: 800,00"
+                                type="number" step="0.01" placeholder="Ex: 20"
                                 className="input-field"
-                                value={newContract.cost_value}
-                                onChange={e => setNewContract({ ...newContract, cost_value: e.target.value })}
-                                onBlur={e => {
-                                    const p = parseCurrencyInput(e.target.value);
-                                    if (p !== '') setNewContract(prev => ({ ...prev, cost_value: formatCurrency(p) }));
-                                }}
+                                value={newContract.cloro_liters}
+                                onChange={e => setNewContract({ ...newContract, cloro_liters: e.target.value })}
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="label">Barrilha (Kg)</label>
+                            <input
+                                type="number" step="0.01" placeholder="Ex: 5"
+                                className="input-field"
+                                value={newContract.barrilha_kg}
+                                onChange={e => setNewContract({ ...newContract, barrilha_kg: e.target.value })}
                                 required
                             />
                         </div>
@@ -667,6 +725,7 @@ const ContractsPage = () => {
                             <p><b>Duração:</b> {newContract.duration_months} meses</p>
                             <p><b>Vencimento Recorrente:</b> Todo dia {newContract.payment_day}</p>
                             <p><b>Data Primeira Fatura:</b> {newContract.first_invoice_date ? newContract.first_invoice_date.split('-').reverse().join('/') : 'Não informada'}</p>
+                            <p><b>Insumos:</b> {newContract.cloro_liters}L de Cloro | {newContract.barrilha_kg}Kg de Barrilha</p>
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
                             <button onClick={() => setAddStep(1)} className="btn-primary" style={{ flex: 1, backgroundColor: '#6b7280' }}>Voltar</button>
@@ -674,6 +733,59 @@ const ContractsPage = () => {
                         </div>
                     </div>
                 )}
+            </Modal>
+
+            {/* Modal Matriz de Calculo */}
+            <Modal isOpen={isMatrixModalOpen} onClose={() => setIsMatrixModalOpen(false)} title="Matriz de Cálculo de Custos">
+                <form onSubmit={handleSaveMatrix} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                    <div>
+                        <label className="label">Custo Base do Contrato (R$)</label>
+                        <input
+                            type="text" inputMode="decimal" className="input-field"
+                            value={matrixData.matrix_base_cost_contract}
+                            onChange={e => setMatrixData({ ...matrixData, matrix_base_cost_contract: e.target.value })}
+                            onBlur={e => {
+                                const p = parseCurrencyInput(e.target.value);
+                                if (p !== '') setMatrixData(prev => ({ ...prev, matrix_base_cost_contract: formatCurrency(p) }));
+                            }}
+                            required
+                        />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label className="label">Custo do Cloro por L (R$)</label>
+                            <input
+                                type="text" inputMode="decimal" className="input-field"
+                                value={matrixData.matrix_cloro_price}
+                                onChange={e => setMatrixData({ ...matrixData, matrix_cloro_price: e.target.value })}
+                                onBlur={e => {
+                                    const p = parseCurrencyInput(e.target.value);
+                                    if (p !== '') setMatrixData(prev => ({ ...prev, matrix_cloro_price: formatCurrency(p) }));
+                                }}
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="label">Custo da Barrilha por Kg (R$)</label>
+                            <input
+                                type="text" inputMode="decimal" className="input-field"
+                                value={matrixData.matrix_barrilha_price}
+                                onChange={e => setMatrixData({ ...matrixData, matrix_barrilha_price: e.target.value })}
+                                onBlur={e => {
+                                    const p = parseCurrencyInput(e.target.value);
+                                    if (p !== '') setMatrixData(prev => ({ ...prev, matrix_barrilha_price: formatCurrency(p) }));
+                                }}
+                                required
+                            />
+                        </div>
+                    </div>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', backgroundColor: 'var(--bg-sidebar)', padding: '1rem', borderRadius: '0.5rem' }}>
+                        <b>Atenção:</b> Alterações nesta matriz afetarão instantaneamente o cálculo de lucro e comissões de TODOS os contratos ativos.
+                    </p>
+                    <button type="submit" className="btn-primary" disabled={isSavingMatrix}>
+                        {isSavingMatrix ? 'Salvando...' : 'Salvar Matriz'}
+                    </button>
+                </form>
             </Modal>
 
             <Modal isOpen={isStatusModalOpen} onClose={() => setIsStatusModalOpen(false)} title="Gestão do Contrato">
