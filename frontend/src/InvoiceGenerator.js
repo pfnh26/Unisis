@@ -105,7 +105,8 @@ export const generateInvoicePDF = async (invoice, returnBlob = false, _contract,
     doc.setFontSize(14);
     doc.text("FATURA", margin + 160, 18, { align: "center" });
     doc.setFontSize(12);
-    doc.text(`Nº ${String(installmentNumber).padStart(3, '0')}`, margin + 160, 26, { align: "center" });
+    const displayInvoiceNumber = invoice.customInvoiceNumber || String(installmentNumber).padStart(3, '0');
+    doc.text(`Nº ${displayInvoiceNumber}`, margin + 160, 26, { align: "center" });
 
     currentY = 40;
 
@@ -210,9 +211,10 @@ export const generateInvoicePDF = async (invoice, returnBlob = false, _contract,
 
     currentY += 6;
     doc.setFont("helvetica", "normal");
-    const descriptionLine1 = isServiceContract ? "CONTRATO DE PRESTAÇÃO DE SERVIÇOS" : (invoice.description || "CONTRATO DE LOCAÇÃO DE DOSADORA");
+    const descriptionLine1 = invoice.customDescription || (isServiceContract ? "CONTRATO DE PRESTAÇÃO DE SERVIÇOS" : (invoice.description || "CONTRATO DE LOCAÇÃO DE DOSADORA"));
     doc.text(descriptionLine1, margin + 2, currentY + 6);
-    doc.text(`REFERENTE AO MES DE ${referenceMonthStr}`, margin + 2, currentY + 11);
+    const descriptionLine2 = invoice.customMonth || `REFERENTE AO MES DE ${referenceMonthStr}`;
+    doc.text(descriptionLine2, margin + 2, currentY + 11);
 
     doc.text(`R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, margin + 130, currentY + 6);
     doc.text("1", margin + 163, currentY + 6);

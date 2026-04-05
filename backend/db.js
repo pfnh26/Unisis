@@ -216,7 +216,9 @@ const initDb = async () => {
       "ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS matrix_cloro_price DECIMAL(10,2) DEFAULT 0",
       "ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS matrix_barrilha_price DECIMAL(10,2) DEFAULT 0",
       "ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cloro_liters DECIMAL(10,2) DEFAULT 0",
-      "ALTER TABLE contracts ADD COLUMN IF NOT EXISTS barrilha_kg DECIMAL(10,2) DEFAULT 0"
+      "ALTER TABLE contracts ADD COLUMN IF NOT EXISTS barrilha_kg DECIMAL(10,2) DEFAULT 0",
+      "ALTER TABLE contracts ADD COLUMN IF NOT EXISTS skipped_installments JSONB DEFAULT '[]'",
+      "ALTER TABLE contracts ADD COLUMN IF NOT EXISTS custom_installments JSONB DEFAULT '{}'"
     ];
 
     for (const sql of migrations) {

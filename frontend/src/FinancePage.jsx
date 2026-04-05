@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from './api';
-import { Search, CreditCard, ShoppingBag, CheckCircle, Clock, Info, ArrowLeft, Send, Trash2 } from 'lucide-react';
+import { Search, CreditCard, ShoppingBag, CheckCircle, Clock, Info, ArrowLeft, Send, Trash2, Edit2 } from 'lucide-react';
 import Modal from './Modal';
 import { format, addMonths, isSameMonth, isSameYear } from 'date-fns';
 import { FileText } from 'lucide-react';
@@ -26,6 +26,8 @@ const FinancePage = () => {
     const [extraSales, setExtraSales] = useState([]);
     const [editableInvoices, setEditableInvoices] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
+    const [isEditInvoiceModalOpen, setIsEditInvoiceModalOpen] = useState(false);
+    const [editInvoiceData, setEditInvoiceData] = useState({ index: -1, invoiceNumber: '', customDescription: '', customMonth: '' });
 
     const fetchData = async () => {
         try {
@@ -167,13 +169,18 @@ const FinancePage = () => {
                 usedPaymentIds.add(match.id);
             }
 
+            const customData = (contract.custom_installments && contract.custom_installments[dueDateStr]) || {};
+
             invoices.push({
                 dueDate: dueDateStr,
                 amount: contract.total_value,
                 isPaid,
                 paymentId,
                 label: `Parcela ${i + 1}`,
-                originalIndex: i
+                originalIndex: i,
+                customInvoiceNumber: customData.invoiceNumber || '',
+                customDescription: customData.customDescription || '',
+                customMonth: customData.customMonth || ''
             });
         }
         return invoices;
@@ -388,6 +395,39 @@ const FinancePage = () => {
         }
     };
 
+    const handleSaveCustomInvoice = async (e) => {
+        e.preventDefault();
+        const { index, invoiceNumber, customDescription, customMonth } = editInvoiceData;
+        const inv = editableInvoices[index];
+        if (!inv) return;
+
+        setIsSaving(true);
+        try {
+            const customInstallments = selectedContract.custom_installments || {};
+            customInstallments[inv.dueDate] = {
+                invoiceNumber,
+                customDescription,
+                customMonth
+            };
+
+            await api.patch(`/contracts/${selectedContract.id}`, {
+                custom_installments: customInstallments
+            });
+
+            // Update local state
+            const updatedContract = { ...selectedContract, custom_installments: customInstallments };
+            setSelectedContract(updatedContract);
+            setEditableInvoices(buildInvoices(updatedContract, payments));
+            setIsEditInvoiceModalOpen(false);
+            alert('Fatura atualizada com sucesso!');
+        } catch (err) {
+            console.error('Erro ao salvar customização da fatura:', err);
+            alert('Erro ao salvar alterações.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     return (
         <div>
             <div style={{ marginBottom: '2rem' }}>
@@ -516,7 +556,23 @@ const FinancePage = () => {
                             }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)' }}>{inv.label}</span>
-                                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                                            <button 
+                                                onClick={() => {
+                                                    setEditInvoiceData({
+                                                        index: idx,
+                                                        invoiceNumber: inv.customInvoiceNumber || '',
+                                                        customDescription: inv.customDescription || '',
+                                                        customMonth: inv.customMonth || ''
+                                                    });
+                                                    setIsEditInvoiceModalOpen(true);
+                                                }}
+                                                className="btn-primary"
+                                                style={{ padding: '0.3rem', backgroundColor: 'transparent', color: '#fbbf24', border: 'none', cursor: 'pointer' }}
+                                                title="Editar Dizeres da Fatura"
+                                            >
+                                                <Edit2 size={16} />
+                                            </button>
                                             <button 
                                                 onClick={() => handleDeleteInvoice(inv, idx)}
                                                 className="btn-danger"
@@ -683,6 +739,52 @@ const FinancePage = () => {
                         </div>
                     )}
                 </div>
+            </Modal>
+
+            {/* MODAL EDITAR DIZERES DA FATURA */}
+            <Modal isOpen={isEditInvoiceModalOpen} onClose={() => setIsEditInvoiceModalOpen(false)} title="Editar Dizeres da Fatura">
+                <form onSubmit={handleSaveCustomInvoice} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+                        Altere os campos abaixo para personalizar esta fatura especificamente. Se deixados em branco, os valores padrão serão usados.
+                    </p>
+                    <div>
+                        <label className="label">Número da Fatura (Nº)</label>
+                        <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="Ex: 005"
+                            value={editInvoiceData.invoiceNumber}
+                            onChange={e => setEditInvoiceData({ ...editInvoiceData, invoiceNumber: e.target.value })}
+                        />
+                    </div>
+                    <div>
+                        <label className="label">Descrição (Linha 1)</label>
+                        <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="Ex: CONTRATO DE LOCAÇÃO..."
+                            value={editInvoiceData.customDescription}
+                            onChange={e => setEditInvoiceData({ ...editInvoiceData, customDescription: e.target.value })}
+                        />
+                    </div>
+                    <div>
+                        <label className="label">Referência (Linha 2)</label>
+                        <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="Ex: REFERENTE AO MES DE MAIO"
+                            value={editInvoiceData.customMonth}
+                            onChange={e => setEditInvoiceData({ ...editInvoiceData, customMonth: e.target.value })}
+                        />
+                    </div>
+                    
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                        <button type="button" onClick={() => setIsEditInvoiceModalOpen(false)} className="btn-primary" style={{ flex: 1, backgroundColor: '#6b7280' }}>Cancelar</button>
+                        <button type="submit" className="btn-primary" style={{ flex: 1 }} disabled={isSaving}>
+                            {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+                        </button>
+                    </div>
+                </form>
             </Modal>
         </div>
     );
