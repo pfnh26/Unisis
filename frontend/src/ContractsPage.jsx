@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from './ToastContext';
 import api from './api';
-import { Search, Plus, FileText, CheckCircle, Trash2, Edit2, CreditCard } from 'lucide-react';
+import { Search, Plus, FileText, CheckCircle, Trash2, Edit2, CreditCard, DollarSign } from 'lucide-react';
 import Modal from './Modal';
 import ModalConfirm from './ModalConfirm';
 import { generateContractPDF, getContractPDFBlobURL } from './ContractGenerator';
@@ -54,6 +54,18 @@ const ContractsPage = () => {
     const [osExecutionDate, setOsExecutionDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [clientSearch, setClientSearch] = useState('');
     const [useClientAddress, setUseClientAddress] = useState(false);
+    
+    // Custos States
+    const [isCostsModalOpen, setIsCostsModalOpen] = useState(false);
+    const [selectedContractForCosts, setSelectedContractForCosts] = useState(null);
+    const [contractCosts, setContractCosts] = useState([]);
+    const [isEditCostModalOpen, setIsEditCostModalOpen] = useState(false);
+    const [editingCost, setEditingCost] = useState(null);
+    const [costTab, setCostTab] = useState('Serviços');
+    const [newCost, setNewCost] = useState({
+        description: '', value: '', date: format(new Date(), 'yyyy-MM-dd'), observation: ''
+    });
+    const [isSavingCost, setIsSavingCost] = useState(false);
 
     const [newContract, setNewContract] = useState({
         client_id: '', partner_id: '', seller_id: '', type: 'Locação',
@@ -75,6 +87,51 @@ const ContractsPage = () => {
     };
 
     useEffect(() => { fetchData(); }, []);
+
+    const fetchCosts = async (contractId) => {
+        try {
+            const res = await api.get(`/contracts/${contractId}/costs`);
+            setContractCosts(res.data);
+        } catch (err) {
+            showToast("Erro ao buscar custos", "error");
+        }
+    };
+
+    const handleSaveCost = async (e) => {
+        if (e) e.preventDefault();
+        setIsSavingCost(true);
+        try {
+            const data = {
+                ...newCost,
+                category: costTab,
+                value: parseCurrencyInput(newCost.value)
+            };
+            if (editingCost) {
+                await api.patch(`/contracts/costs/${editingCost.id}`, data);
+                showToast("Custo atualizado com sucesso!", "success");
+            } else {
+                await api.post(`/contracts/${selectedContractForCosts.id}/costs`, data);
+                showToast("Custo adicionado com sucesso!", "success");
+            }
+            setIsEditCostModalOpen(false);
+            fetchCosts(selectedContractForCosts.id);
+        } catch (err) {
+            showToast("Erro ao salvar custo", "error");
+        } finally {
+            setIsSavingCost(false);
+        }
+    };
+
+    const handleDeleteCost = async (id) => {
+        if (!window.confirm("Tem certeza que deseja excluir este custo?")) return;
+        try {
+            await api.delete(`/contracts/costs/${id}`);
+            showToast("Custo removido", "success");
+            fetchCosts(selectedContractForCosts.id);
+        } catch (err) {
+            showToast("Erro ao remover custo", "error");
+        }
+    };
 
     const handleViewPDF = (contract) => {
         if (contract.pdf_url) {
@@ -295,6 +352,7 @@ const ContractsPage = () => {
                                 <td data-label="Duração">{c.duration_months} meses</td>
                                 <td data-label="Ações">
                                     <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                        <button onClick={() => { setSelectedContractForCosts(c); fetchCosts(c.id); setIsCostsModalOpen(true); }} title="Custos" className="btn-primary" style={{ padding: '0.6rem', backgroundColor: '#64748b' }}><DollarSign size={18} /></button>
                                         <button onClick={() => handleViewPDF(c)} title="Ver PDF" className="btn-primary" style={{ padding: '0.6rem', backgroundColor: '#3b82f6' }}><FileText size={18} /></button>
                                         <button onClick={() => { setSelectedContract(c); setIsStatusModalOpen(true); }} title="Status/OS" className="btn-primary" style={{ padding: '0.6rem', backgroundColor: '#8b5cf6' }}><CheckCircle size={18} /></button>
                                         <button onClick={() => startEdit(c)} title="Editar" className="btn-primary" style={{ padding: '0.6rem', backgroundColor: '#fbbf24' }}><Edit2 size={18} /></button>
@@ -306,6 +364,120 @@ const ContractsPage = () => {
                     </tbody>
                 </table>
             </div>
+
+            {/* Modal de Custos (Lista) */}
+            <Modal isOpen={isCostsModalOpen} onClose={() => setIsCostsModalOpen(false)} title={`Custos do Contrato: ${selectedContractForCosts?.client_name || ''}`}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+                    <button onClick={() => {
+                        setEditingCost(null);
+                        setNewCost({ description: '', value: '', date: format(new Date(), 'yyyy-MM-dd'), observation: '' });
+                        setCostTab('Serviços');
+                        setIsEditCostModalOpen(true);
+                    }} className="btn-primary" style={{ backgroundColor: '#10b981' }}>
+                        <Plus size={18} /> Novo Custo
+                    </button>
+                </div>
+                <div className="table-container card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Descrição</th>
+                                <th>Categoria</th>
+                                <th>Valor</th>
+                                <th>Data</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {contractCosts.length === 0 ? (
+                                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Nenhum custo registrado.</td></tr>
+                            ) : (
+                                contractCosts.map(cost => (
+                                    <tr key={cost.id}>
+                                        <td data-label="Descrição">{cost.description}</td>
+                                        <td data-label="Categoria">{cost.category}</td>
+                                        <td data-label="Valor">R$ {formatCurrency(cost.value)}</td>
+                                        <td data-label="Data">{format(safeDate(cost.date), 'dd/MM/yyyy')}</td>
+                                        <td data-label="Ações">
+                                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                                                <button onClick={() => {
+                                                    setEditingCost(cost);
+                                                    setNewCost({
+                                                        description: cost.description,
+                                                        value: formatCurrency(cost.value),
+                                                        date: format(safeDate(cost.date), 'yyyy-MM-dd'),
+                                                        observation: cost.observation || ''
+                                                    });
+                                                    setCostTab(cost.category);
+                                                    setIsEditCostModalOpen(true);
+                                                }} className="btn-primary" style={{ padding: '0.4rem', backgroundColor: '#fbbf24' }}><Edit2 size={14} /></button>
+                                                <button onClick={() => handleDeleteCost(cost.id)} className="btn-primary" style={{ padding: '0.4rem', backgroundColor: '#ef4444' }}><Trash2 size={14} /></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </Modal>
+
+            {/* Modal de Adicionar/Editar Custo */}
+            <Modal isOpen={isEditCostModalOpen} onClose={() => setIsEditCostModalOpen(false)} title={editingCost ? "Editar Custo" : "Adicionar Custo"}>
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                    <button
+                        onClick={() => setCostTab('Serviços')}
+                        style={{
+                            padding: '0.5rem 1rem', background: 'none', borderBottom: costTab === 'Serviços' ? '2px solid var(--primary)' : 'none',
+                            color: costTab === 'Serviços' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, flex: 1
+                        }}
+                    >
+                        Serviços
+                    </button>
+                    <button
+                        onClick={() => setCostTab('Analise')}
+                        style={{
+                            padding: '0.5rem 1rem', background: 'none', borderBottom: costTab === 'Analise' ? '2px solid var(--primary)' : 'none',
+                            color: costTab === 'Analise' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, flex: 1
+                        }}
+                    >
+                        Analise
+                    </button>
+                </div>
+                <form onSubmit={handleSaveCost} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div>
+                        <label className="label">Descrição</label>
+                        <input type="text" className="input-field" value={newCost.description} onChange={e => setNewCost({ ...newCost, description: e.target.value })} required />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label className="label">Valor (R$)</label>
+                            <input
+                                type="text" inputMode="decimal" placeholder="0,00"
+                                className="input-field"
+                                value={newCost.value}
+                                onChange={e => setNewCost({ ...newCost, value: e.target.value })}
+                                onBlur={e => {
+                                    const p = parseCurrencyInput(e.target.value);
+                                    if (p !== '') setNewCost(prev => ({ ...prev, value: formatCurrency(p) }));
+                                }}
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="label">Data</label>
+                            <input type="date" className="input-field" value={newCost.date} onChange={e => setNewCost({ ...newCost, date: e.target.value })} required />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="label">Observação</label>
+                        <textarea className="input-field" value={newCost.observation} onChange={e => setNewCost({ ...newCost, observation: e.target.value })} style={{ minHeight: '80px' }} />
+                    </div>
+                    <button type="submit" className="btn-primary" style={{ marginTop: '1rem' }} disabled={isSavingCost}>
+                        {isSavingCost ? 'Salvando...' : 'Salvar Custo'}
+                    </button>
+                </form>
+            </Modal>
 
             <Modal isOpen={isAddModalOpen} onClose={() => { setIsAddModalOpen(false); setAddStep(1); }} title={addStep === 1 ? (editingContractId ? "Editar Contrato" : "Gerador de Novo Contrato") : "Preview do Contrato"}>
                 {addStep === 1 && (

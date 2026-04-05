@@ -101,6 +101,42 @@ class ContractController {
             res.status(500).json({ error: err.message });
         }
     }
+
+    async getContractCosts(req, res) {
+        try {
+            const costs = await this.contractService.getContractCosts(req.params.id);
+            res.json(costs);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    }
+
+    async addContractCost(req, res) {
+        try {
+            const cost = await this.contractService.addContractCost(req.params.id, req.body);
+            res.status(201).json(cost);
+        } catch (err) {
+            res.status(400).json({ error: err.message });
+        }
+    }
+
+    async updateContractCost(req, res) {
+        try {
+            const cost = await this.contractService.updateContractCost(req.params.costId, req.body);
+            res.json(cost);
+        } catch (err) {
+            res.status(400).json({ error: err.message });
+        }
+    }
+
+    async deleteContractCost(req, res) {
+        try {
+            await this.contractService.deleteContractCost(req.params.costId);
+            res.json({ success: true });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    }
 }
 
 module.exports = ContractController;

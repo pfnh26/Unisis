@@ -37,7 +37,7 @@ class CommissionService {
 
         let contractCommissions = [];
         for (let contract of contractsRes.rows) {
-            const profitPerMonth = parseFloat(contract.total_value) - parseFloat(contract.cost_value);
+            const baseMonthlyProfit = parseFloat(contract.total_value) - parseFloat(contract.cost_value);
 
             // Get all payments for this contract sorted by date
             const allPaymentsRes = await this.pool.query(`
@@ -46,53 +46,64 @@ class CommissionService {
                 ORDER BY payment_date ASC, id ASC
             `, [contract.id]);
 
+            // Get all dynamic costs for this contract
+            const contractCostsRes = await this.pool.query(`
+                SELECT * FROM contract_costs WHERE contract_id = $1
+            `, [contract.id]);
+            const contractCosts = contractCostsRes.rows;
+
             let runningProfitStore = 0;
             const pumpValue = parseFloat(contract.pump_value || 0);
 
             for (let payment of allPaymentsRes.rows) {
-                const payMonth = new Date(payment.payment_date).getMonth() + 1;
-                const payYear = new Date(payment.payment_date).getFullYear();
+                const payMonth = new Date(payment.payment_date).getUTCMonth() + 1;
+                const payYear = new Date(payment.payment_date).getUTCFullYear();
+
+                // Find dynamic costs for THIS specific month/year
+                const monthlyDynamicCosts = contractCosts
+                    .filter(c => {
+                        const d = new Date(c.date);
+                        return (d.getUTCMonth() + 1) === payMonth && d.getUTCFullYear() === payYear;
+                    })
+                    .reduce((sum, c) => sum + parseFloat(c.value), 0);
+
+                const actualProfitThisMonth = baseMonthlyProfit - monthlyDynamicCosts;
 
                 let commission = 0;
                 let status = "Amortizando Bomba";
 
                 if (!contract.has_pump || contract.no_amortization) {
-                    commission = profitPerMonth * (parseFloat(contract.profit_percentage) / 100);
+                    commission = actualProfitThisMonth * (parseFloat(contract.profit_percentage) / 100);
                     status = "Comissionado";
                 } else {
-                    const currentTotalAccumulated = runningProfitStore + profitPerMonth;
+                    const currentTotalAccumulated = runningProfitStore + actualProfitThisMonth;
 
                     if (runningProfitStore >= pumpValue) {
-                        // Se já estava amortizado antes deste pagamento
-                        commission = profitPerMonth * (parseFloat(contract.profit_percentage) / 100);
+                        commission = actualProfitThisMonth * (parseFloat(contract.profit_percentage) / 100);
                         status = "Comissionado";
                     } else if (currentTotalAccumulated > pumpValue) {
-                        // Se atingiu o limite de amortização NESTE pagamento
                         const commissionablePart = currentTotalAccumulated - pumpValue;
                         commission = commissionablePart * (parseFloat(contract.profit_percentage) / 100);
                         status = "Comissionado (Pós-Amortização)";
                     } else {
-                        // Ainda em amortização total
                         commission = 0;
                         status = "Amortizando Bomba";
                     }
                 }
 
-                // If this payment happened in the month we are reporting
                 if (payMonth === parseInt(month) && payYear === parseInt(year)) {
                     contractCommissions.push({
                         type: 'Contrato',
                         date: payment.payment_date,
                         client: contract.client_name,
                         value: contract.total_value,
-                        profit: profitPerMonth,
+                        profit: actualProfitThisMonth,
                         commission: commission,
                         status: status
                     });
                 }
 
-                // Update running profit for the NEXT payment
-                runningProfitStore += profitPerMonth;
+                runningProfitStore += actualProfitThisMonth;
             }
         }
 

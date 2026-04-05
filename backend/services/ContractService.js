@@ -118,6 +118,9 @@ class ContractService {
             // Delete related service orders
             await client.query('DELETE FROM service_orders WHERE contract_id = $1', [id]);
 
+            // Delete related costs
+            await client.query('DELETE FROM contract_costs WHERE contract_id = $1', [id]);
+
             // Delete contract
             await client.query('DELETE FROM contracts WHERE id = $1', [id]);
 
@@ -133,6 +136,34 @@ class ContractService {
 
     async uploadPdf(id, pdfUrl) {
         return await this.contractRepository.update(id, { pdf_url: pdfUrl });
+    }
+
+    async getContractCosts(contractId) {
+        const result = await this.pool.query('SELECT * FROM contract_costs WHERE contract_id = $1 ORDER BY date DESC', [contractId]);
+        return result.rows;
+    }
+
+    async addContractCost(contractId, data) {
+        const { description, value, date, category, observation } = data;
+        const result = await this.pool.query(
+            'INSERT INTO contract_costs (contract_id, description, value, date, category, observation) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [contractId, description, value, date, category, observation]
+        );
+        return result.rows[0];
+    }
+
+    async updateContractCost(costId, data) {
+        const { description, value, date, category, observation } = data;
+        const result = await this.pool.query(
+            'UPDATE contract_costs SET description = $1, value = $2, date = $3, category = $4, observation = $5 WHERE id = $6 RETURNING *',
+            [description, value, date, category, observation, costId]
+        );
+        return result.rows[0];
+    }
+
+    async deleteContractCost(costId) {
+        await this.pool.query('DELETE FROM contract_costs WHERE id = $1', [costId]);
+        return { success: true };
     }
 }
 

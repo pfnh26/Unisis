@@ -197,6 +197,12 @@ app.delete('/api/contracts/:id', authenticateToken, (req, res) => controllers.co
 app.post('/api/contracts/:id/upload', authenticateToken, upload.single('pdf'), (req, res) => controllers.contract.uploadPdf(req, res));
 app.get('/api/contracts/:id/payments', authenticateToken, (req, res) => controllers.payment.getPaymentsByContract(req, res));
 
+// Contract Costs
+app.get('/api/contracts/:id/costs', authenticateToken, (req, res) => controllers.contract.getContractCosts(req, res));
+app.post('/api/contracts/:id/costs', authenticateToken, (req, res) => controllers.contract.addContractCost(req, res));
+app.patch('/api/contracts/costs/:costId', authenticateToken, (req, res) => controllers.contract.updateContractCost(req, res));
+app.delete('/api/contracts/costs/:costId', authenticateToken, (req, res) => controllers.contract.deleteContractCost(req, res));
+
 // Sales
 app.get('/api/extra-sales', authenticateToken, (req, res) => controllers.sale.getSales(req, res));
 app.post('/api/extra-sales', authenticateToken, (req, res) => controllers.sale.createSale(req, res));
